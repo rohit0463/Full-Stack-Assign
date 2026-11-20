@@ -1,8 +1,10 @@
 from typing import List
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
     LLM_API_KEYS: str = "demo-key-1,demo-key-2"
     DATABASE_URL: str = "sqlite:////data/app.db"
     ALLOWED_ORIGINS: str = "*"
@@ -20,10 +22,6 @@ class Settings(BaseSettings):
         if self.ALLOWED_ORIGINS.strip() == "*":
             return ["*"]
         return [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",") if origin.strip()]
-
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
 
 
 settings = Settings()

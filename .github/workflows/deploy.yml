@@ -36,16 +36,7 @@ jobs:
       - name: Run Pytest
         run: |
           cd backend
-          python -m pytest -v > ../pytest_output.txt 2>&1 || {
-            cd ..
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git checkout -B ci-debug
-            git add pytest_output.txt
-            git commit -m "debug: pytest output"
-            git push -f origin ci-debug
-            exit 1
-          }
+          python -m pytest -v
 
   deploy-frontend:
     name: Deploy Frontend to GitHub Pages
