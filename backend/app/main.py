@@ -98,6 +98,25 @@ def root():
     }
 
 
+@app.get("/debug/keys")
+def debug_keys():
+    """
+    Safe debug endpoint returning masked keys to diagnose provider connection.
+    """
+    keys = settings.api_key_list
+    masked = []
+    for idx, k in enumerate(keys):
+        if len(k) > 8:
+            masked.append(f"key_{idx+1}: {k[:4]}...{k[-4:]} (len: {len(k)})")
+        else:
+            masked.append(f"key_{idx+1}: {k} (len: {len(k)})")
+    return {
+        "keys_count": len(keys),
+        "keys_configured": masked,
+        "model": settings.LLM_MODEL
+    }
+
+
 @app.get("/health", response_model=HealthResponse)
 def health():
     """
