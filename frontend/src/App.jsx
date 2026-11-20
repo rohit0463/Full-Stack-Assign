@@ -41,9 +41,17 @@ function MarkdownContent({ content }) {
       const renderer = new window.marked.Renderer();
 
       // Custom code block renderer (supports Mermaid diagrams & copy button)
-      renderer.code = function ({ text, lang }) {
-        const codeText = text || '';
-        const language = (lang || '').toLowerCase().trim();
+      renderer.code = function (code, lang, escaped) {
+        let codeText = '';
+        let language = '';
+
+        if (typeof code === 'object' && code !== null) {
+          codeText = code.text || '';
+          language = (code.lang || '').toLowerCase().trim();
+        } else {
+          codeText = typeof code === 'string' ? code : '';
+          language = (typeof lang === 'string' ? lang : '').toLowerCase().trim();
+        }
 
         if (language === 'mermaid') {
           return `
@@ -69,11 +77,21 @@ function MarkdownContent({ content }) {
       };
 
       // Custom image renderer with modern card wrapper
-      renderer.image = function ({ href, title, text }) {
-        const altText = text || title || 'Visual depiction';
+      renderer.image = function (href, title, text) {
+        let imageHref = '';
+        let altText = '';
+
+        if (typeof href === 'object' && href !== null) {
+          imageHref = href.href || '';
+          altText = href.text || href.title || 'Visual depiction';
+        } else {
+          imageHref = typeof href === 'string' ? href : '';
+          altText = typeof text === 'string' ? text : (typeof title === 'string' ? title : 'Visual depiction');
+        }
+
         return `
           <figure class="chatgpt-image-card">
-            <img src="${href}" alt="${escapeHtml(altText)}" loading="lazy" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format&fit=crop&w=800&q=80';" />
+            <img src="${imageHref}" alt="${escapeHtml(altText)}" loading="lazy" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format&fit=crop&w=800&q=80';" />
             <figcaption>${escapeHtml(altText)}</figcaption>
           </figure>
         `;
