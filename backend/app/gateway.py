@@ -107,7 +107,7 @@ async def execute_chat(
         }
     }
     """
-    model = settings.LLM_MODEL
+    model = settings.effective_model
     cache_key = compute_cache_key(model, messages)
 
     start_time = time.perf_counter()
