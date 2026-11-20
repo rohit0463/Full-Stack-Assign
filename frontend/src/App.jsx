@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
+import './index.css';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'https://lyftr-backend-rohit.onrender.com';
+const API_BASE = import.meta.env.VITE_API_BASE || 'https://lyftr-backend-rohit.onrender.com';
 
 function generateSessionId() {
-  return 's-' + Math.random().toString(36).substring(2, 9);
+  return 'sess-' + Math.random().toString(36).substring(2, 9) + '-' + Date.now().toString(36);
 }
 
 export default function App() {
-  // New session on page load
   const [sessionId, setSessionId] = useState(generateSessionId);
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
@@ -16,17 +16,26 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [healthInfo, setHealthInfo] = useState(null);
   const [copiedSession, setCopiedSession] = useState(false);
-  const [showDeveloperPanel, setShowDeveloperPanel] = useState(false);
-  const [showMetrics, setShowMetrics] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const p = new URLSearchParams(window.location.search);
-      return p.get('metrics') === '1' || p.get('debug') === 'true';
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showDevModal, setShowDevModal] = useState(false);
+  const [showGlobalMetrics, setShowGlobalMetrics] = useState(false);
+  const [expandedDetails, setExpandedDetails] = useState({});
+  const [copiedIndex, setCopiedIndex] = useState(null);
+
+  // Saved sessions list for the sidebar
+  const [sessions, setSessions] = useState(() => {
+    try {
+      const saved = localStorage.getItem('aurora_sessions');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
     }
-    return false;
   });
+
+  const textareaRef = useRef(null);
   const messagesEndRef = useRef(null);
 
-  // Check health and backend connectivity on mount
+  // Fetch backend health on mount
   useEffect(() => {
     fetch(`${API_BASE}/health`)
       .then((res) => res.json())
@@ -34,95 +43,148 @@ export default function App() {
       .catch((err) => console.error('Health check error:', err));
   }, []);
 
+  // Save sessions to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('aurora_sessions', JSON.stringify(sessions));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [sessions]);
+
   // Auto scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 
+  // Auto-resize textarea
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
+    }
+  }, [inputMessage]);
+
   const handleNewSession = () => {
     const newId = generateSessionId();
+    // Add current session to sidebar if it has messages
+    if (messages.length > 0) {
+      const firstUserMsg = messages.find((m) => m.role === 'user');
+      const title = firstUserMsg ? firstUserMsg.content.slice(0, 32) : 'Conversation';
+      setSessions((prev) => [
+        { id: sessionId, title: title + '...', timestamp: Date.now() },
+        ...prev.filter((s) => s.id !== sessionId).slice(0, 20),
+      ]);
+    }
     setSessionId(newId);
     setMessages([]);
-  };
-
-  const copySessionId = () => {
-    navigator.clipboard.writeText(sessionId);
-    setCopiedSession(true);
-    setTimeout(() => setCopiedSession(false), 2000);
-  };
-
-  const handleSend = async (e, customText = null, customSim = null) => {
-    if (e) e.preventDefault();
-    const textToSend = (customText !== null ? customText : inputMessage).trim();
-    if (!textToSend || isLoading) return;
-
-    const simToSend = customSim !== null ? customSim : simulationHeader;
-
-    // Immediately clear input as per requirement: "Empty after sending"
     setInputMessage('');
+  };
 
-    // Append user message to UI
-    const userMsg = {
-      role: 'user',
-      content: textToSend,
-    };
-    setMessages((prev) => [...prev, userMsg]);
+  const handleSwitchSession = async (targetId) => {
+    if (targetId === sessionId) return;
+    setSessionId(targetId);
+    setIsLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/sessions/${targetId}/messages`);
+      if (res.ok) {
+        const data = await res.json();
+        setMessages(
+          data.messages.map((m) => ({
+            role: m.role,
+            content: m.content,
+            metadata: m.metadata || null,
+          }))
+        );
+      } else {
+        setMessages([]);
+      }
+    } catch (e) {
+      console.error('Failed to load session history:', e);
+      setMessages([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSend = async (e, directText = null, overrideSim = null) => {
+    if (e) e.preventDefault();
+    const textToSend = directText !== null ? directText : inputMessage;
+    if (!textToSend.trim() || isLoading) return;
+
+    const userMessage = { role: 'user', content: textToSend };
+    setMessages((prev) => [...prev, userMessage]);
+    if (directText === null) setInputMessage('');
     setIsLoading(true);
 
+    // Track session title in sidebar
+    setSessions((prev) => {
+      const existing = prev.find((s) => s.id === sessionId);
+      if (!existing) {
+        return [
+          { id: sessionId, title: textToSend.slice(0, 30) + '...', timestamp: Date.now() },
+          ...prev.slice(0, 20),
+        ];
+      }
+      return prev;
+    });
+
+    const headers = { 'Content-Type': 'application/json' };
+    const simToUse = overrideSim !== null ? overrideSim : simulationHeader;
+    if (simToUse && simToUse.trim()) {
+      headers['X-Simulate-Failure'] = simToUse.trim();
+    }
+
+    const payload = {
+      session_id: sessionId,
+      message: textToSend,
+      system_prompt: systemPrompt.trim() ? systemPrompt : undefined,
+    };
+
     try {
-      const headers = {
-        'Content-Type': 'application/json',
-      };
-      if (simToSend && simToSend.trim()) {
-        headers['X-Simulate-Failure'] = simToSend.trim();
-      }
-
-      const body = {
-        session_id: sessionId,
-        message: textToSend,
-      };
-      if (systemPrompt.trim()) {
-        body.system_prompt = systemPrompt.trim();
-      }
-
-      const response = await fetch(`${API_BASE}/chat`, {
+      const res = await fetch(`${API_BASE}/chat`, {
         method: 'POST',
         headers,
-        body: JSON.stringify(body),
+        body: JSON.stringify(payload),
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        // Handle 422, 503 or other errors cleanly in chat
-        const errorDetail =
-          typeof data.detail === 'string'
-            ? data.detail
-            : JSON.stringify(data.detail) || 'Failed to process request';
+      if (!res.ok) {
+        let errDetail = `Error ${res.status}: ${res.statusText}`;
+        try {
+          const errData = await res.json();
+          if (errData.detail) {
+            errDetail = typeof errData.detail === 'string' ? errData.detail : JSON.stringify(errData.detail);
+          }
+        } catch {
+          // fallback to statusText
+        }
         setMessages((prev) => [
           ...prev,
           {
             role: 'error',
-            content: `Error (${response.status}): ${errorDetail}`,
+            content: errDetail,
+            statusCode: res.status,
           },
         ]);
-      } else {
-        // Success
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: 'assistant',
-            content: data.reply,
-            metadata: data.metadata,
-          },
-        ]);
+        return;
       }
+
+      const data = await res.json();
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: data.reply,
+          metadata: data.metadata,
+        },
+      ]);
     } catch (err) {
       setMessages((prev) => [
         ...prev,
         {
           role: 'error',
-          content: `Network error: ${err.message || 'Unable to contact backend.'}`,
+          content: `Network connection failed: ${err.message}`,
+          statusCode: 500,
         },
       ]);
     } finally {
@@ -133,365 +195,535 @@ export default function App() {
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      handleSend(e);
     }
   };
 
+  const copyToClipboard = (text, index) => {
+    navigator.clipboard.writeText(text);
+    setCopiedIndex(index);
+    setTimeout(() => setCopiedIndex(null), 2000);
+  };
+
+  const toggleDetails = (idx) => {
+    setExpandedDetails((prev) => ({
+      ...prev,
+      [idx]: !prev[idx],
+    }));
+  };
+
   return (
-    <div className="aurora-container">
-      {/* Header */}
-      <header className="aurora-header">
-        <div className="brand-section">
-          <div className="brand-logo">🌌</div>
-          <div className="brand-text">
-            <h1>Aurora AI</h1>
-            <p>Resilient LLM Gateway with Cache Telemetry</p>
-          </div>
+    <div className="chatgpt-layout">
+      {/* Collapsible Left Sidebar */}
+      <aside className={`chatgpt-sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
+        <div className="sidebar-top">
+          <button
+            className="new-chat-btn"
+            onClick={handleNewSession}
+            title="Start a new chat"
+          >
+            <span className="icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </span>
+            <span>New chat</span>
+          </button>
+
+          <button
+            className="sidebar-toggle-btn"
+            onClick={() => setSidebarOpen(false)}
+            title="Close sidebar"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <line x1="9" y1="3" x2="9" y2="21" />
+            </svg>
+          </button>
         </div>
 
-        <div className="header-actions">
+        {/* Sessions / Chat History List */}
+        <div className="sidebar-history">
+          <div className="history-label">Recent Chats</div>
+          <div
+            className={`history-item active`}
+            onClick={() => {}}
+          >
+            <span className="chat-bubble-icon">💬</span>
+            <span className="chat-title">Current Conversation</span>
+          </div>
+
+          {sessions.map((sess) => (
+            <div
+              key={sess.id}
+              className={`history-item ${sess.id === sessionId ? 'active' : ''}`}
+              onClick={() => handleSwitchSession(sess.id)}
+            >
+              <span className="chat-bubble-icon">💬</span>
+              <span className="chat-title">{sess.title}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Sidebar Footer */}
+        <div className="sidebar-footer">
+          <div
+            className="sidebar-user-pill"
+            onClick={() => setShowDevModal(true)}
+            title="Configure Failover Simulator and System Prompt"
+          >
+            <div className="user-avatar">⚙️</div>
+            <div className="user-info">
+              <span className="user-name">Developer Settings</span>
+              <span className="user-sub">Failover Hook & Keys</span>
+            </div>
+          </div>
+
           {healthInfo && (
-            <div className="status-badge" title="Backend health verified">
-              <span className="status-pulse" />
-              <span>{healthInfo.keys_configured} Keys Ready</span>
+            <div className="health-pill" title="Live backend status">
+              <span className="health-dot" />
+              <span>{healthInfo.keys_configured} Keys Active</span>
             </div>
           )}
-
-          <div
-            className="session-pill"
-            onClick={copySessionId}
-            title="Click to copy Session ID"
-          >
-            <span>Session:</span>
-            <code>{sessionId}</code>
-            <span>{copiedSession ? '✓' : '📋'}</span>
-          </div>
-
-          <button
-            className={`btn-icon-text ${showMetrics ? 'active' : ''}`}
-            onClick={() => setShowMetrics(!showMetrics)}
-            title="Toggle live inference and cache telemetry badges"
-          >
-            {showMetrics ? '📊 Hide Metrics' : '📊 Show Metrics'}
-          </button>
-
-          <button
-            className="btn-icon-text"
-            onClick={handleNewSession}
-            title="Reset conversation state and generate new session"
-          >
-            ↻ New Chat
-          </button>
         </div>
-      </header>
-
-      {/* Developer Playground & Failover Simulator */}
-      <section className="aurora-panel">
-        <div
-          className="panel-header"
-          onClick={() => setShowDeveloperPanel(!showDeveloperPanel)}
-        >
-          <span className="panel-title">
-            🛠️ Developer Playground & Failover Simulator
-          </span>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            {showDeveloperPanel ? '▲ Minimize' : '▼ Expand'}
-          </span>
-        </div>
-
-        {showDeveloperPanel && (
-          <div className="panel-content">
-            {/* System Prompt Group */}
-            <div className="control-group">
-              <span className="control-title">System Persona</span>
-              <input
-                type="text"
-                className="input-styled"
-                data-testid="system-prompt-input"
-                placeholder="Optional persona prompt (e.g. You are a Senior Software Architect...)"
-                value={systemPrompt}
-                onChange={(e) => setSystemPrompt(e.target.value)}
-              />
-              <div className="preset-pills">
-                <button
-                  type="button"
-                  className="preset-pill"
-                  onClick={() =>
-                    setSystemPrompt(
-                      'You are an expert AI software architect. Be precise and technical.'
-                    )
-                  }
-                >
-                  Tech Architect
-                </button>
-                <button
-                  type="button"
-                  className="preset-pill"
-                  onClick={() =>
-                    setSystemPrompt(
-                      'You are a direct, concise assistant. Answer in 1-2 punchy sentences.'
-                    )
-                  }
-                >
-                  Ultra Concise
-                </button>
-                <button
-                  type="button"
-                  className="preset-pill"
-                  onClick={() => setSystemPrompt('')}
-                >
-                  Clear
-                </button>
-              </div>
-            </div>
-
-            {/* Failover Simulator Group */}
-            <div className="control-group">
-              <span className="control-title">Failover Hook</span>
-              <div className="preset-pills">
-                <button
-                  type="button"
-                  className={`preset-pill ${simulationHeader === '' ? 'active' : ''}`}
-                  onClick={() => setSimulationHeader('')}
-                >
-                  ● Normal Execution
-                </button>
-                <button
-                  type="button"
-                  className={`preset-pill ${
-                    simulationHeader === 'key_1=429' ? 'active' : ''
-                  }`}
-                  onClick={() => setSimulationHeader('key_1=429')}
-                >
-                  ⚡ Simulate Key 1 Rate Limit (429)
-                </button>
-                <button
-                  type="button"
-                  className={`preset-pill ${
-                    simulationHeader === 'key_1=500' ? 'active' : ''
-                  }`}
-                  onClick={() => setSimulationHeader('key_1=500')}
-                >
-                  ⚠️ Simulate Key 1 Server Error (500)
-                </button>
-                <button
-                  type="button"
-                  className={`preset-pill ${
-                    simulationHeader === '*=429' ? 'active' : ''
-                  }`}
-                  onClick={() => setSimulationHeader('*=429')}
-                >
-                  🛑 Simulate All Keys Down (*=429)
-                </button>
-              </div>
-              <input
-                type="text"
-                className="input-styled"
-                placeholder="Custom X-Simulate-Failure (e.g. key_1=429,key_2=500)"
-                value={simulationHeader}
-                onChange={(e) => setSimulationHeader(e.target.value)}
-                style={{ maxWidth: '280px' }}
-              />
-            </div>
-          </div>
-        )}
-      </section>
+      </aside>
 
       {/* Main Chat Canvas */}
-      <main className="chat-canvas">
-        <div className="feed-container">
-          {messages.length === 0 && (
-            <div className="hero-state">
-              <div className="hero-glow-badge">🌌</div>
-              <h2>Welcome to Aurora AI</h2>
-              <p>
-                A high-reliability AI conversation gateway with built-in response
-                caching, instant multi-key failover, and per-turn telemetry.
-              </p>
-
-              <div className="starter-cards">
-                <div
-                  className="starter-card"
-                  onClick={() =>
-                    handleSend(null, 'What is the capital of France?')
-                  }
-                >
-                  <strong>⚡ Test Cache Hits</strong>
-                  <span>
-                    Ask once for LIVE_INFERENCE, then ask in a new chat for
-                    LLM_CACHE.
-                  </span>
-                </div>
-
-                <div
-                  className="starter-card"
-                  onClick={() => {
-                    setSimulationHeader('key_1=429');
-                    handleSend(
-                      null,
-                      'Tell me a fascinating space fact.',
-                      'key_1=429'
-                    );
-                  }}
-                >
-                  <strong>🛡️ Test Key Failover</strong>
-                  <span>
-                    Simulate key_1 failing with HTTP 429 and verify instant
-                    fallback to key_2.
-                  </span>
-                </div>
-
-                <div
-                  className="starter-card"
-                  onClick={() =>
-                    handleSend(
-                      null,
-                      'Explain Quantum Computing in two clear sentences.'
-                    )
-                  }
-                >
-                  <strong>💡 Technical QA</strong>
-                  <span>
-                    Test token tracking and low-latency inference on Groq /
-                    Gemini.
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {messages.map((msg, index) => {
-            if (msg.role === 'user') {
-              return (
-                <div key={index} className="msg-row user">
-                  <div className="user-bubble">{msg.content}</div>
-                </div>
-              );
-            }
-
-            if (msg.role === 'error') {
-              return (
-                <div key={index} className="error-card">
-                  <span style={{ fontSize: '1.2rem' }}>⚠️</span>
-                  <span>{msg.content}</span>
-                </div>
-              );
-            }
-
-            // Assistant message
-            return (
-              <div key={index} className="msg-row assistant">
-                <div className="assistant-card" data-testid="assistant-message">
-                  <div className="assistant-body">{msg.content}</div>
-
-                  {msg.metadata && (
-                    <div
-                      className={`telemetry-ribbon ${
-                        !showMetrics ? 'telemetry-hidden' : ''
-                      }`}
-                    >
-                      {/* Resolution Source: Exactly LIVE_INFERENCE or LLM_CACHE */}
-                      <span
-                        className={`telemetry-pill ${
-                          msg.metadata.resolution_source === 'LLM_CACHE'
-                            ? 'cache-src'
-                            : 'live-src'
-                        }`}
-                      >
-                        {msg.metadata.resolution_source === 'LLM_CACHE' ? '💾 ' : '⚡ '}
-                        <span data-testid="meta-source">{msg.metadata.resolution_source}</span>
-                      </span>
-
-                      {/* Model */}
-                      <span className="telemetry-pill model-tag">
-                        🤖 <span data-testid="meta-model">{msg.metadata.model}</span>
-                      </span>
-
-                      {/* Latency */}
-                      <span className="telemetry-pill">
-                        ⏱️ <span data-testid="meta-latency">{msg.metadata.latency_ms} ms</span>
-                      </span>
-
-                      {/* Input Tokens */}
-                      <span className="telemetry-pill">
-                        in:{' '}
-                        <strong data-testid="meta-input-tokens">
-                          {msg.metadata.input_tokens}
-                        </strong>
-                      </span>
-
-                      {/* Output Tokens */}
-                      <span className="telemetry-pill">
-                        out:{' '}
-                        <strong data-testid="meta-output-tokens">
-                          {msg.metadata.output_tokens}
-                        </strong>
-                      </span>
-
-                      {/* Key ID */}
-                      {msg.metadata.key_id && (
-                        <span className="telemetry-pill key-tag">
-                          🔑 {msg.metadata.key_id}
-                        </span>
-                      )}
-
-                      {/* Fallback Attempts */}
-                      {msg.metadata.fallback_attempts > 0 && (
-                        <span className="telemetry-pill fallback-warn">
-                          ⚠️ {msg.metadata.fallback_attempts} fallback(s)
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-
-          {isLoading && (
-            <div className="msg-row assistant">
-              <div
-                className="assistant-card"
-                style={{
-                  color: 'var(--text-muted)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.6rem',
-                }}
+      <div className="chatgpt-main">
+        {/* Top Navigation Bar */}
+        <header className="chatgpt-header">
+          <div className="header-left">
+            {!sidebarOpen && (
+              <button
+                className="header-btn"
+                onClick={() => setSidebarOpen(true)}
+                title="Open sidebar"
               >
-                <div className="status-pulse" />
-                <span>Aurora is generating response...</span>
-              </div>
-            </div>
-          )}
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                  <line x1="9" y1="3" x2="9" y2="21" />
+                </svg>
+              </button>
+            )}
 
-          <div ref={messagesEndRef} />
+            <div
+              className="model-selector"
+              onClick={() => setShowDevModal(true)}
+              title="Click to view Gateway & Failover status"
+            >
+              <span className="model-name">Aurora AI</span>
+              <span className="model-badge">Groq LPU</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </div>
+          </div>
+
+          <div className="header-right">
+            <button
+              className={`header-pill-btn ${showGlobalMetrics ? 'active' : ''}`}
+              onClick={() => setShowGlobalMetrics(!showGlobalMetrics)}
+              title="Show resolution source (LIVE/CACHE), latency, and tokens"
+            >
+              {showGlobalMetrics ? '📊 Hide Metrics' : '📊 Show Metrics'}
+            </button>
+
+            <button
+              className="header-pill-btn"
+              onClick={() => setShowDevModal(true)}
+              title="Open Failover & System Config"
+            >
+              🛠️ Failover Hook
+            </button>
+
+            <button
+              className="header-btn"
+              onClick={handleNewSession}
+              title="New Chat"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+              </svg>
+            </button>
+          </div>
+        </header>
+
+        {/* Message Feed Area */}
+        <div className="chat-feed-scroll">
+          <div className="chat-feed-container">
+            {messages.length === 0 ? (
+              <div className="chatgpt-hero">
+                <div className="hero-spark">
+                  <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="1.5">
+                    <path d="M12 2v20M2 12h20M4.93 4.93l14.14 14.14M4.93 19.07l14.14-14.14" />
+                  </svg>
+                </div>
+                <h2>What can I help with today?</h2>
+
+                <div className="prompt-grid">
+                  <div
+                    className="prompt-card"
+                    onClick={() => handleSend(null, 'Explain Quantum Computing in two clear sentences.')}
+                  >
+                    <span className="prompt-title">Explain Quantum Computing</span>
+                    <span className="prompt-sub">in two simple sentences</span>
+                  </div>
+
+                  <div
+                    className="prompt-card"
+                    onClick={() => handleSend(null, 'What is machine learning in one sentence?')}
+                  >
+                    <span className="prompt-title">Test Cache Hit (1 ms)</span>
+                    <span className="prompt-sub">Send twice to see instant cache</span>
+                  </div>
+
+                  <div
+                    className="prompt-card"
+                    onClick={() => {
+                      setSimulationHeader('key_1=429');
+                      handleSend(null, 'Tell me a fascinating fact about Mars.', 'key_1=429');
+                    }}
+                  >
+                    <span className="prompt-title">Simulate 429 Failover</span>
+                    <span className="prompt-sub">Fallback smoothly to key_2</span>
+                  </div>
+
+                  <div
+                    className="prompt-card"
+                    onClick={() => handleSend(null, 'Write a clean Python FastAPI health endpoint with pydantic.')}
+                  >
+                    <span className="prompt-title">Write a Python Endpoint</span>
+                    <span className="prompt-sub">FastAPI + Pydantic model</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="messages-list">
+                {messages.map((msg, idx) => {
+                  if (msg.role === 'user') {
+                    return (
+                      <div key={idx} className="msg-row user">
+                        <div className="user-bubble">{msg.content}</div>
+                      </div>
+                    );
+                  }
+
+                  if (msg.role === 'error') {
+                    return (
+                      <div key={idx} className="msg-row error">
+                        <div className="error-bubble">
+                          <span className="error-icon">⚠️</span>
+                          <span className="error-text">{msg.content}</span>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // Assistant message
+                  const isDetailsOpen = showGlobalMetrics || expandedDetails[idx];
+
+                  return (
+                    <div key={idx} className="msg-row assistant">
+                      <div className="assistant-avatar">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="12" r="10" />
+                          <circle cx="12" cy="12" r="4" />
+                          <line x1="4.93" y1="4.93" x2="9.17" y2="9.17" />
+                          <line x1="14.83" y1="14.83" x2="19.07" y2="19.07" />
+                          <line x1="14.83" y1="9.17" x2="19.07" y2="4.93" />
+                          <line x1="4.93" y1="19.07" x2="9.17" y2="14.83" />
+                        </svg>
+                      </div>
+
+                      <div className="assistant-content" data-testid="assistant-message">
+                        <div className="assistant-text">{msg.content}</div>
+
+                        {/* Subtle ChatGPT Action Bar */}
+                        <div className="msg-actions">
+                          <button
+                            className="action-btn"
+                            onClick={() => copyToClipboard(msg.content, idx)}
+                            title="Copy response"
+                          >
+                            {copiedIndex === idx ? '✓ Copied' : (
+                              <>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg>
+                                <span>Copy</span>
+                              </>
+                            )}
+                          </button>
+
+                          {msg.metadata && (
+                            <button
+                              className={`action-btn ${isDetailsOpen ? 'active' : ''}`}
+                              onClick={() => toggleDetails(idx)}
+                              title="Toggle metadata details"
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <circle cx="12" cy="12" r="10" />
+                                <line x1="12" y1="16" x2="12" y2="12" />
+                                <line x1="12" y1="8" x2="12.01" y2="8" />
+                              </svg>
+                              <span>{isDetailsOpen ? 'Hide Info' : 'Info'}</span>
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Telemetry Ribbon (Evaluator testids strictly preserved) */}
+                        {msg.metadata && (
+                          <div className={`telemetry-ribbon ${!isDetailsOpen ? 'telemetry-hidden' : ''}`}>
+                            {/* Resolution Source: Exactly LIVE_INFERENCE or LLM_CACHE */}
+                            <span
+                              className={`telemetry-pill ${
+                                msg.metadata.resolution_source === 'LLM_CACHE'
+                                  ? 'cache-src'
+                                  : 'live-src'
+                              }`}
+                            >
+                              {msg.metadata.resolution_source === 'LLM_CACHE' ? '💾 ' : '⚡ '}
+                              <span data-testid="meta-source">{msg.metadata.resolution_source}</span>
+                            </span>
+
+                            {/* Model */}
+                            <span className="telemetry-pill">
+                              🤖 <span data-testid="meta-model">{msg.metadata.model}</span>
+                            </span>
+
+                            {/* Latency */}
+                            <span className="telemetry-pill">
+                              ⏱️ <span data-testid="meta-latency">{msg.metadata.latency_ms} ms</span>
+                            </span>
+
+                            {/* Input Tokens */}
+                            <span className="telemetry-pill">
+                              in: <strong data-testid="meta-input-tokens">{msg.metadata.input_tokens}</strong>
+                            </span>
+
+                            {/* Output Tokens */}
+                            <span className="telemetry-pill">
+                              out: <strong data-testid="meta-output-tokens">{msg.metadata.output_tokens}</strong>
+                            </span>
+
+                            {/* Key ID */}
+                            {msg.metadata.key_id && (
+                              <span className="telemetry-pill key-tag">
+                                🔑 {msg.metadata.key_id}
+                              </span>
+                            )}
+
+                            {/* Fallback Attempts */}
+                            {msg.metadata.fallback_attempts > 0 && (
+                              <span className="telemetry-pill fallback-warn">
+                                ⚠️ {msg.metadata.fallback_attempts} fallback(s)
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {isLoading && (
+                  <div className="msg-row assistant">
+                    <div className="assistant-avatar">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <circle cx="12" cy="12" r="4" />
+                      </svg>
+                    </div>
+                    <div className="assistant-content">
+                      <div className="typing-indicator">
+                        <span />
+                        <span />
+                        <span />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div ref={messagesEndRef} />
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Input Form Dock */}
-        <form className="input-dock" onSubmit={handleSend}>
-          <input
-            type="text"
-            className="dock-input"
-            data-testid="chat-input"
-            placeholder="Ask Aurora anything... (Press Enter to send)"
-            value={inputMessage}
-            onChange={(e) => setInputMessage(e.target.value)}
-            onKeyDown={handleKeyDown}
-            disabled={isLoading}
-            autoFocus
-          />
-          <button
-            type="submit"
-            className="dock-send"
-            data-testid="send-button"
-            disabled={isLoading || !inputMessage.trim()}
-          >
-            <span>Send</span>
-            <span>↑</span>
-          </button>
-        </form>
-      </main>
+        {/* ChatGPT Bottom Dock */}
+        <div className="chatgpt-input-wrapper">
+          <form className="chatgpt-input-box" onSubmit={handleSend}>
+            <textarea
+              ref={textareaRef}
+              rows={1}
+              value={inputMessage}
+              onChange={(e) => setInputMessage(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Message Aurora AI..."
+              data-testid="chat-input"
+              disabled={isLoading}
+            />
+
+            <button
+              type="submit"
+              className={`send-circle-btn ${inputMessage.trim() && !isLoading ? 'ready' : ''}`}
+              data-testid="send-button"
+              disabled={!inputMessage.trim() || isLoading}
+              title="Send message"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <line x1="12" y1="19" x2="12" y2="5" />
+                <polyline points="5 12 12 5 19 12" />
+              </svg>
+            </button>
+          </form>
+
+          <div className="input-disclaimer">
+            Aurora AI can make mistakes. Verify important information.
+          </div>
+        </div>
+      </div>
+
+      {/* Developer & Failover Simulator Modal */}
+      {showDevModal && (
+        <div className="modal-backdrop" onClick={() => setShowDevModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>🛠️ Developer Playground & Failover</h3>
+              <button className="modal-close-btn" onClick={() => setShowDevModal(false)}>
+                ✕
+              </button>
+            </div>
+
+            <div className="modal-body">
+              {/* System Prompt (Contract: data-testid="system-prompt-input") */}
+              <div className="modal-section">
+                <label className="section-label">System Persona Prompt</label>
+                <input
+                  type="text"
+                  className="modal-input"
+                  data-testid="system-prompt-input"
+                  placeholder="e.g. You are a helpful AI assistant. Answer concisely."
+                  value={systemPrompt}
+                  onChange={(e) => setSystemPrompt(e.target.value)}
+                />
+                <div className="modal-pills">
+                  <button
+                    type="button"
+                    className="modal-pill"
+                    onClick={() => setSystemPrompt('You are an expert AI software architect. Be precise and concise.')}
+                  >
+                    Expert Architect
+                  </button>
+                  <button
+                    type="button"
+                    className="modal-pill"
+                    onClick={() => setSystemPrompt('Answer every question like a witty 17th century pirate.')}
+                  >
+                    Pirate Mode
+                  </button>
+                  <button
+                    type="button"
+                    className="modal-pill"
+                    onClick={() => setSystemPrompt('')}
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+
+              {/* Failover Hook (X-Simulate-Failure) */}
+              <div className="modal-section">
+                <label className="section-label">Failover Hook Header (X-Simulate-Failure)</label>
+                <div className="modal-pills">
+                  <button
+                    type="button"
+                    className={`modal-pill ${simulationHeader === '' ? 'active' : ''}`}
+                    onClick={() => setSimulationHeader('')}
+                  >
+                    ● Normal Execution
+                  </button>
+                  <button
+                    type="button"
+                    className={`modal-pill ${simulationHeader === 'key_1=429' ? 'active' : ''}`}
+                    onClick={() => setSimulationHeader('key_1=429')}
+                  >
+                    ⚡ Key 1 Rate Limit (429)
+                  </button>
+                  <button
+                    type="button"
+                    className={`modal-pill ${simulationHeader === 'key_1=500' ? 'active' : ''}`}
+                    onClick={() => setSimulationHeader('key_1=500')}
+                  >
+                    ⚠️ Key 1 Server Error (500)
+                  </button>
+                  <button
+                    type="button"
+                    className={`modal-pill ${simulationHeader === '*=429' ? 'active' : ''}`}
+                    onClick={() => setSimulationHeader('*=429')}
+                  >
+                    🛑 All Keys Down (*=429)
+                  </button>
+                </div>
+
+                <input
+                  type="text"
+                  className="modal-input"
+                  placeholder="Custom X-Simulate-Failure (e.g. key_1=429,key_2=500)"
+                  value={simulationHeader}
+                  onChange={(e) => setSimulationHeader(e.target.value)}
+                  style={{ marginTop: '0.5rem' }}
+                />
+              </div>
+
+              {/* Telemetry Toggle */}
+              <div className="modal-section">
+                <label className="section-label">Telemetry Badges</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <button
+                    type="button"
+                    className={`modal-pill ${showGlobalMetrics ? 'active' : ''}`}
+                    onClick={() => setShowGlobalMetrics(!showGlobalMetrics)}
+                  >
+                    {showGlobalMetrics ? '✓ Enabled on all messages' : '✕ Hidden by default'}
+                  </button>
+                  <span style={{ fontSize: '0.78rem', color: '#8e8e8e' }}>
+                    Turn ON during video recording to show LIVE_INFERENCE, LLM_CACHE, and key_2 fallback.
+                  </span>
+                </div>
+              </div>
+
+              {/* Session ID */}
+              <div className="modal-section">
+                <label className="section-label">Active Session ID</label>
+                <div className="session-display">
+                  <code>{sessionId}</code>
+                  <button
+                    type="button"
+                    className="modal-pill"
+                    onClick={() => {
+                      navigator.clipboard.writeText(sessionId);
+                      setCopiedSession(true);
+                      setTimeout(() => setCopiedSession(false), 2000);
+                    }}
+                  >
+                    {copiedSession ? '✓ Copied' : 'Copy ID'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button className="modal-done-btn" onClick={() => setShowDevModal(false)}>
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
