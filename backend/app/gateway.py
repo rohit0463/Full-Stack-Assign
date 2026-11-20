@@ -155,10 +155,20 @@ async def execute_chat(
             fallback_attempts += 1
             continue
 
+        # Smart provider detection from key prefix
+        current_model = model
+        if api_key.startswith("gsk_") and not current_model.startswith("groq/"):
+            current_model = "groq/llama-3.3-70b-versatile"
+        elif api_key.startswith("sk-") and not api_key.startswith("sk-ant") and not current_model.startswith("openai/"):
+            current_model = "openai/gpt-4o-mini"
+
+        masked_key = f"{api_key[:6]}...{api_key[-4:]}" if len(api_key) > 10 else "***"
+        print(f"[GATEWAY] Attempting completion using {key_id} ({masked_key}) with model {current_model}", flush=True)
+
         try:
             # LiteLLM completion
             response = await litellm.acompletion(
-                model=model,
+                model=current_model,
                 messages=messages,
                 api_key=api_key,
                 temperature=0.7,
@@ -179,10 +189,38 @@ async def execute_chat(
                 output_tokens = len(reply_text.split()) * 2
 
             success_key_id = key_id
+            model = current_model
             break
 
         except Exception as e:
-            logger.warning(f"Provider {key_id} failed: {e}")
+            print(f"[GATEWAY] Provider {key_id} failed: {type(e).__name__}: {e}", flush=True)
+
+            # If gemini-2.0 failed with 404 or not found, auto-try gemini-1.5-flash
+            if "2.0" in current_model and ("not found" in str(e).lower() or "404" in str(e)):
+                try:
+                    fallback_model = "gemini/gemini-1.5-flash"
+                    print(f"[GATEWAY] Retrying {key_id} with fallback model {fallback_model}", flush=True)
+                    response = await litellm.acompletion(
+                        model=fallback_model,
+                        messages=messages,
+                        api_key=api_key,
+                        temperature=0.7,
+                        max_tokens=1000
+                    )
+                    reply_text = response.choices[0].message.content or ""
+                    usage = getattr(response, "usage", None)
+                    if usage:
+                        input_tokens = getattr(usage, "prompt_tokens", 0) or 0
+                        output_tokens = getattr(usage, "completion_tokens", 0) or 0
+                    else:
+                        input_tokens = sum(len(m.get("content", "").split()) for m in messages) * 2
+                        output_tokens = len(reply_text.split()) * 2
+                    success_key_id = key_id
+                    model = fallback_model
+                    break
+                except Exception as e2:
+                    print(f"[GATEWAY] Fallback model also failed: {type(e2).__name__}: {e2}", flush=True)
+
             fallback_attempts += 1
             continue
 
