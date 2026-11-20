@@ -1,0 +1,36 @@
+services:
+  # Backend FastAPI Service
+  - type: web
+    name: lyftr-llm-chatbot-backend
+    env: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    region: oregon
+    disk:
+      name: sqlite-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: DATABASE_URL
+        value: sqlite:////data/app.db
+      - key: LLM_API_KEYS
+        sync: false
+      - key: ALLOWED_ORIGINS
+        value: "*"
+      - key: ENABLE_FAILURE_SIMULATION
+        value: "true"
+      - key: LLM_MODEL
+        value: gemini/gemini-2.0-flash
+
+  # Frontend Static / Container Service
+  - type: web
+    name: lyftr-llm-chatbot-frontend
+    env: docker
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    plan: free
+    region: oregon
+    envVars:
+      - key: VITE_API_URL
+        value: https://lyftr-llm-chatbot-backend.onrender.com
