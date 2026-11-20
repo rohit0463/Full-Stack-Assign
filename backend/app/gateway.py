@@ -200,7 +200,7 @@ async def execute_chat(
                 messages=messages,
                 api_key=api_key,
                 temperature=0.7,
-                max_tokens=1000
+                max_tokens=3500
             )
 
             # Extract reply text
@@ -235,7 +235,7 @@ async def execute_chat(
                         messages=messages,
                         api_key=api_key,
                         temperature=0.7,
-                        max_tokens=1000
+                        max_tokens=3500
                     )
                     reply_text = response.choices[0].message.content or ""
                     usage = getattr(response, "usage", None)
@@ -261,7 +261,7 @@ async def execute_chat(
                         messages=messages,
                         api_key=api_key,
                         temperature=0.7,
-                        max_tokens=1000
+                        max_tokens=3500
                     )
                     reply_text = response.choices[0].message.content or ""
                     usage = getattr(response, "usage", None)
