@@ -54,7 +54,20 @@ def parse_simulation_header(header_val: Optional[str]) -> Dict[str, int]:
     return failures
 
 
-def compute_cache_key(model: str, messages: List[Dict[str, str]]) -> str:
+def extract_text_content(content: Any) -> str:
+    """Helper to safely get string text from string or multimodal list content."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for part in content:
+            if isinstance(part, dict) and "text" in part:
+                parts.append(part["text"])
+        return " ".join(parts)
+    return str(content or "")
+
+
+def compute_cache_key(model: str, messages: List[Dict[str, Any]]) -> str:
     """
     Cache key: model + the full message list sent to the LLM (system prompt + history + new message).
     """
@@ -162,8 +175,12 @@ async def execute_chat(
 
         # Smart provider detection from key prefix
         current_model = model
+        has_image = any(isinstance(m.get("content"), list) for m in messages)
+
         if api_key.startswith("gsk_"):
-            if not current_model.startswith("groq/openai/gpt-oss") and not current_model.startswith("groq/qwen"):
+            if has_image:
+                current_model = "groq/qwen/qwen3.8-27b"
+            elif not current_model.startswith("groq/openai/gpt-oss") and not current_model.startswith("groq/qwen"):
                 current_model = "groq/openai/gpt-oss-20b"
         elif api_key.startswith("sk-") and not api_key.startswith("sk-ant") and not current_model.startswith("openai/"):
             current_model = "openai/gpt-4o-mini"
@@ -196,7 +213,7 @@ async def execute_chat(
                 output_tokens = getattr(usage, "completion_tokens", 0) or 0
             else:
                 # Estimate if not provided
-                input_tokens = sum(len(m.get("content", "").split()) for m in messages) * 2
+                input_tokens = sum(len(extract_text_content(m.get("content")).split()) for m in messages) * 2
                 output_tokens = len(reply_text.split()) * 2
 
             success_key_id = key_id

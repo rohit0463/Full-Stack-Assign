@@ -130,6 +130,7 @@ export default function App() {
   const [showGlobalMetrics, setShowGlobalMetrics] = useState(false);
   const [expandedDetails, setExpandedDetails] = useState({});
   const [copiedIndex, setCopiedIndex] = useState(null);
+  const [attachedFile, setAttachedFile] = useState(null);
 
   // Saved sessions list for the sidebar
   const [sessions, setSessions] = useState(() => {
@@ -143,6 +144,40 @@ export default function App() {
 
   const textareaRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setAttachedFile({
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          data: reader.result,
+          previewUrl: reader.result,
+          isImage: true,
+        });
+      };
+      reader.readAsDataURL(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setAttachedFile({
+          name: file.name,
+          type: file.type || 'text/plain',
+          size: file.size,
+          data: reader.result,
+          isImage: false,
+        });
+      };
+      reader.readAsText(file);
+    }
+    e.target.value = '';
+  };
 
   // Fetch backend health on mount
   useEffect(() => {
@@ -218,11 +253,17 @@ export default function App() {
   const handleSend = async (e, directText = null, overrideSim = null) => {
     if (e) e.preventDefault();
     const textToSend = directText !== null ? directText : inputMessage;
-    if (!textToSend.trim() || isLoading) return;
+    if ((!textToSend.trim() && !attachedFile) || isLoading) return;
 
-    const userMessage = { role: 'user', content: textToSend };
+    const currentFile = attachedFile;
+    const finalMessageText = textToSend.trim() || (currentFile ? `Please analyze this attached file: ${currentFile.name}` : '');
+
+    const userMessage = { role: 'user', content: finalMessageText, file: currentFile };
     setMessages((prev) => [...prev, userMessage]);
-    if (directText === null) setInputMessage('');
+    if (directText === null) {
+      setInputMessage('');
+      setAttachedFile(null);
+    }
     setIsLoading(true);
 
     // Track session title in sidebar
@@ -230,7 +271,7 @@ export default function App() {
       const existing = prev.find((s) => s.id === sessionId);
       if (!existing) {
         return [
-          { id: sessionId, title: textToSend.slice(0, 30) + '...', timestamp: Date.now() },
+          { id: sessionId, title: finalMessageText.slice(0, 30) + '...', timestamp: Date.now() },
           ...prev.slice(0, 20),
         ];
       }
@@ -245,8 +286,16 @@ export default function App() {
 
     const payload = {
       session_id: sessionId,
-      message: textToSend,
+      message: finalMessageText,
       system_prompt: systemPrompt.trim() ? systemPrompt : undefined,
+      file: currentFile
+        ? {
+            name: currentFile.name,
+            type: currentFile.type,
+            data: currentFile.data,
+            size: currentFile.size,
+          }
+        : undefined,
     };
 
     try {
@@ -513,7 +562,21 @@ export default function App() {
                   if (msg.role === 'user') {
                     return (
                       <div key={idx} className="msg-row user">
-                        <div className="user-bubble">{msg.content}</div>
+                        <div className="user-bubble">
+                          {msg.file && (
+                            <div className="user-attachment-preview">
+                              {msg.file.isImage ? (
+                                <img src={msg.file.data} alt={msg.file.name} className="user-bubble-image" />
+                              ) : (
+                                <div className="user-bubble-file">
+                                  <span className="file-badge-icon">📄</span>
+                                  <span className="file-badge-name">{msg.file.name}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          <div className="user-bubble-text">{msg.content}</div>
+                        </div>
                       </div>
                     );
                   }
@@ -664,23 +727,63 @@ export default function App() {
 
         {/* ChatGPT Bottom Dock */}
         <div className="chatgpt-input-wrapper">
+          {attachedFile && (
+            <div className="attachment-chip">
+              {attachedFile.isImage ? (
+                <img src={attachedFile.data} alt={attachedFile.name} className="chip-thumbnail" />
+              ) : (
+                <span className="chip-icon">📄</span>
+              )}
+              <div className="chip-info">
+                <span className="chip-name">{attachedFile.name}</span>
+                <span className="chip-size">({(attachedFile.size / 1024).toFixed(1)} KB)</span>
+              </div>
+              <button
+                type="button"
+                className="chip-remove-btn"
+                onClick={() => setAttachedFile(null)}
+                title="Remove attachment"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
           <form className="chatgpt-input-box" onSubmit={handleSend}>
+            <button
+              type="button"
+              className="attach-btn"
+              onClick={() => fileInputRef.current?.click()}
+              title="Attach photos, images, or files to search/analyze"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+              </svg>
+            </button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              style={{ display: 'none' }}
+              accept="image/*,.pdf,.txt,.py,.js,.java,.cpp,.csv,.json,.md,.html,.css"
+              onChange={handleFileChange}
+            />
+
             <textarea
               ref={textareaRef}
               rows={1}
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Message Aurora AI... (Ask for diagrams, code, or images)"
+              placeholder="Message Aurora AI... (Attach images, files, or ask anything)"
               data-testid="chat-input"
               disabled={isLoading}
             />
 
             <button
               type="submit"
-              className={`send-circle-btn ${inputMessage.trim() && !isLoading ? 'ready' : ''}`}
+              className={`send-circle-btn ${(inputMessage.trim() || attachedFile) && !isLoading ? 'ready' : ''}`}
               data-testid="send-button"
-              disabled={!inputMessage.trim() || isLoading}
+              disabled={(!inputMessage.trim() && !attachedFile) || isLoading}
               title="Send message"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">

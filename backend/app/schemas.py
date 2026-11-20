@@ -8,10 +8,18 @@ class HealthResponse(BaseModel):
     cache_enabled: bool
 
 
+class FileAttachment(BaseModel):
+    name: str
+    type: str
+    data: Optional[str] = None
+    size: Optional[int] = None
+
+
 class ChatRequest(BaseModel):
     session_id: str = Field(..., min_length=1, max_length=128)
     message: str = Field(...)
     system_prompt: Optional[str] = None
+    file: Optional[FileAttachment] = None
 
     @field_validator("message")
     @classmethod

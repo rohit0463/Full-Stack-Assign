@@ -191,7 +191,30 @@ async def chat(
     for msg in existing_messages:
         llm_messages.append({"role": msg["role"], "content": msg["content"]})
 
-    llm_messages.append({"role": "user", "content": payload.message})
+    # Prepare user message content (supporting text, document uploads, and images)
+    user_db_content = payload.message
+    if payload.file:
+        if payload.file.type.startswith("image/"):
+            user_db_content = f"📷 [{payload.file.name}]\n{payload.message}"
+            if payload.file.data and payload.file.data.startswith("data:image"):
+                llm_messages.append({
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": f"[Uploaded Image: {payload.file.name}]\n{payload.message}"},
+                        {"type": "image_url", "image_url": {"url": payload.file.data}}
+                    ]
+                })
+            else:
+                llm_messages.append({"role": "user", "content": f"[Uploaded Image: {payload.file.name}]\n{payload.message}"})
+        else:
+            snippet = (payload.file.data or "")[:25000]
+            user_db_content = f"📄 [{payload.file.name}]\n{payload.message}"
+            llm_messages.append({
+                "role": "user",
+                "content": f"[Attached Document: {payload.file.name}]\n```\n{snippet}\n```\n\n{payload.message}"
+            })
+    else:
+        llm_messages.append({"role": "user", "content": payload.message})
 
     # 3. Execute LLM call with LiteLLM gateway, fallback, and cache
     try:
@@ -219,7 +242,7 @@ async def chat(
     add_message(
         session_id=payload.session_id,
         role="user",
-        content=payload.message,
+        content=user_db_content,
     )
 
     # Store assistant message with metadata
