@@ -1,4 +1,5 @@
 import logging
+import re
 from contextlib import asynccontextmanager
 from typing import Optional
 
@@ -207,7 +208,12 @@ async def chat(
             else:
                 llm_messages.append({"role": "user", "content": f"[Uploaded Image: {payload.file.name}]\n{payload.message}"})
         else:
-            snippet = (payload.file.data or "")[:25000]
+            # Clean printable text and limit to 3,500 characters to stay within Groq's 8,000 TPM limit
+            raw_text = payload.file.data or ""
+            clean_chars = [c for c in raw_text if c.isprintable() or c in "\n\t "]
+            clean_text = "".join(clean_chars).strip()
+            clean_text = re.sub(r"[ \t]+", " ", clean_text)
+            snippet = clean_text[:3500]
             user_db_content = f"📄 [{payload.file.name}]\n{payload.message}"
             llm_messages.append({
                 "role": "user",
@@ -223,6 +229,17 @@ async def chat(
             simulate_failure_header=x_simulate_failure,
         )
     except AllProvidersUnavailable:
+        from app.gateway import last_provider_error
+        if x_simulate_failure:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="all providers unavailable",
+            )
+        if last_provider_error and ("tokens per minute" in last_provider_error.lower() or "too large" in last_provider_error.lower()):
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="Document too large for Groq free-tier rate limits (8,000 TPM). Please upload a smaller excerpt or text file.",
+            )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="all providers unavailable",

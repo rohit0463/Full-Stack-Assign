@@ -166,11 +166,20 @@ export default function App() {
     } else {
       const reader = new FileReader();
       reader.onload = () => {
+        let text = reader.result || '';
+        // If it is a PDF or binary file, strip unprintable binary noise to avoid token limits
+        if (file.name.endsWith('.pdf') || file.type === 'application/pdf') {
+          text = text.replace(/[^\x20-\x7E\n\t]/g, ' ').replace(/\s+/g, ' ').trim();
+          text = text.slice(0, 3500);
+        } else {
+          text = text.slice(0, 5000);
+        }
+
         setAttachedFile({
           name: file.name,
           type: file.type || 'text/plain',
           size: file.size,
-          data: reader.result,
+          data: text,
           isImage: false,
         });
       };
