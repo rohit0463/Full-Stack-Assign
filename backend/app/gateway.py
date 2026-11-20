@@ -163,8 +163,8 @@ async def execute_chat(
         # Smart provider detection from key prefix
         current_model = model
         if api_key.startswith("gsk_"):
-            if "70b" in current_model or "llama-3.3" in current_model or not current_model.startswith("groq/"):
-                current_model = "groq/llama-3.1-8b-instant"
+            if not current_model.startswith("groq/openai/gpt-oss") and not current_model.startswith("groq/qwen"):
+                current_model = "groq/openai/gpt-oss-20b"
         elif api_key.startswith("sk-") and not api_key.startswith("sk-ant") and not current_model.startswith("openai/"):
             current_model = "openai/gpt-4o-mini"
 
@@ -234,10 +234,10 @@ async def execute_chat(
                 except Exception as e2:
                     print(f"[GATEWAY] Fallback model also failed: {type(e2).__name__}: {e2}", flush=True)
 
-            # If Groq failed with model not found, auto-try llama-3.1-8b-instant
+            # If Groq failed with model not found, auto-try openai/gpt-oss-20b
             if "groq" in current_model and ("not found" in str(e).lower() or "model_not_found" in str(e)):
                 try:
-                    fallback_model = "groq/llama-3.1-8b-instant"
+                    fallback_model = "groq/openai/gpt-oss-20b"
                     print(f"[GATEWAY] Retrying {key_id} with fallback Groq model {fallback_model}", flush=True)
                     response = await litellm.acompletion(
                         model=fallback_model,
