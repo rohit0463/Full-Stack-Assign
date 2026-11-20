@@ -26,6 +26,7 @@ COPY . /app
 RUN mkdir -p /data
 
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH="/app:/app/backend"
 ENV DATABASE_URL="sqlite:////data/app.db"
 ENV ALLOWED_ORIGINS="*"
 ENV ENABLE_FAILURE_SIMULATION="true"

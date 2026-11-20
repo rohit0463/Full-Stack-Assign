@@ -1,4 +1,3 @@
-# Root Dockerfile for Render / Cloud deployments
 # Stage 1: Build & dependencies
 FROM python:3.11-slim as builder
 
@@ -8,7 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-COPY backend/requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 # Stage 2: Minimal runtime
@@ -21,12 +20,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /install /usr/local
-COPY backend/ /app/
+COPY . /app
 
 # Ensure SQLite data directory exists
 RUN mkdir -p /data
 
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH="/app:/app/backend"
 ENV DATABASE_URL="sqlite:////data/app.db"
 ENV ALLOWED_ORIGINS="*"
 ENV ENABLE_FAILURE_SIMULATION="true"
