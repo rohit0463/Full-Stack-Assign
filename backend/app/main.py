@@ -178,16 +178,16 @@ async def chat(
             messages=llm_messages,
             simulate_failure_header=x_simulate_failure,
         )
-    except AllProvidersUnavailable as ep:
+    except AllProvidersUnavailable:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(ep) if str(ep) else "all providers unavailable",
+            detail="all providers unavailable",
         )
     except Exception as e:
         logger.error(f"Execution error in chat: {e}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Execution error: {type(e).__name__}: {str(e)}",
+            detail="all providers unavailable",
         )
 
     reply = result["reply"]

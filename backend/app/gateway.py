@@ -1,3 +1,4 @@
+import os
 import time
 import json
 import hashlib
@@ -236,7 +237,7 @@ async def execute_chat(
             continue
 
     if success_key_id is None or reply_text is None:
-        raise AllProvidersUnavailable(f"all providers unavailable ({last_provider_error})")
+        raise AllProvidersUnavailable("all providers unavailable")
 
     latency_ms = int((time.perf_counter() - start_time) * 1000)
     if latency_ms < 1:
