@@ -10,7 +10,7 @@ A resilient, production-ready full-stack AI application featuring LiteLLM multi-
 - **Live Backend API**: [https://lyftr-llm-chatbot-backend.onrender.com](https://lyftr-llm-chatbot-backend.onrender.com) *(or your deployed Render / Railway URL)*
 - **Interactive API Documentation (Swagger)**: `https://lyftr-llm-chatbot-backend.onrender.com/docs`
 - **Health Check**: `https://lyftr-llm-chatbot-backend.onrender.com/health`
-- **GitHub Repository**: [https://github.com/rohit0463/lyftr-llm-chatbot](https://github.com/rohit0463/lyftr-llm-chatbot)
+- **GitHub Repository**: [https://github.com/rohit0463/Full-Stack-Assign](https://github.com/rohit0463/Full-Stack-Assign)
 
 ---
 
@@ -22,8 +22,8 @@ Prerequisites: Docker & Docker Compose installed.
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/rohit0463/lyftr-llm-chatbot.git
-   cd lyftr-llm-chatbot
+   git clone https://github.com/rohit0463/Full-Stack-Assign.git
+   cd Full-Stack-Assign
    ```
 
 2. **Configure Environment Variables**:
