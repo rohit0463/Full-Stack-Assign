@@ -36,18 +36,16 @@ jobs:
       - name: Run Pytest
         run: |
           cd backend
-          python -m pytest -v > pytest_output.txt 2>&1 || {
-            echo "### Pytest Failure Output" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            cat pytest_output.txt >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            cat pytest_output.txt
+          python -m pytest -v > ../pytest_output.txt 2>&1 || {
+            cd ..
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git checkout -B ci-debug
+            git add pytest_output.txt
+            git commit -m "debug: pytest output"
+            git push -f origin ci-debug
             exit 1
           }
-          echo "### Pytest Succeeded" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          cat pytest_output.txt >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
 
   deploy-frontend:
     name: Deploy Frontend to GitHub Pages
