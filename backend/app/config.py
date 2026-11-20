@@ -31,9 +31,11 @@ class Settings(BaseSettings):
     def effective_model(self) -> str:
         keys = self.api_key_list
         if keys and keys[0].startswith("gsk_"):
-            return "groq/llama-3.3-70b-versatile"
+            return "groq/llama-3.1-8b-instant"
         elif keys and keys[0].startswith("sk-") and not keys[0].startswith("sk-ant"):
             return "openai/gpt-4o-mini"
+        if "llama-3.3" in self.LLM_MODEL or "70b" in self.LLM_MODEL:
+            return "groq/llama-3.1-8b-instant"
         return self.LLM_MODEL
 
 

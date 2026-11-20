@@ -162,8 +162,9 @@ async def execute_chat(
 
         # Smart provider detection from key prefix
         current_model = model
-        if api_key.startswith("gsk_") and not current_model.startswith("groq/"):
-            current_model = "groq/llama-3.3-70b-versatile"
+        if api_key.startswith("gsk_"):
+            if "70b" in current_model or "llama-3.3" in current_model or not current_model.startswith("groq/"):
+                current_model = "groq/llama-3.1-8b-instant"
         elif api_key.startswith("sk-") and not api_key.startswith("sk-ant") and not current_model.startswith("openai/"):
             current_model = "openai/gpt-4o-mini"
 
@@ -232,6 +233,32 @@ async def execute_chat(
                     break
                 except Exception as e2:
                     print(f"[GATEWAY] Fallback model also failed: {type(e2).__name__}: {e2}", flush=True)
+
+            # If Groq failed with model not found, auto-try llama-3.1-8b-instant
+            if "groq" in current_model and ("not found" in str(e).lower() or "model_not_found" in str(e)):
+                try:
+                    fallback_model = "groq/llama-3.1-8b-instant"
+                    print(f"[GATEWAY] Retrying {key_id} with fallback Groq model {fallback_model}", flush=True)
+                    response = await litellm.acompletion(
+                        model=fallback_model,
+                        messages=messages,
+                        api_key=api_key,
+                        temperature=0.7,
+                        max_tokens=1000
+                    )
+                    reply_text = response.choices[0].message.content or ""
+                    usage = getattr(response, "usage", None)
+                    if usage:
+                        input_tokens = getattr(usage, "prompt_tokens", 0) or 0
+                        output_tokens = getattr(usage, "completion_tokens", 0) or 0
+                    else:
+                        input_tokens = sum(len(m.get("content", "").split()) for m in messages) * 2
+                        output_tokens = len(reply_text.split()) * 2
+                    success_key_id = key_id
+                    model = fallback_model
+                    break
+                except Exception as e3:
+                    print(f"[GATEWAY] Groq fallback also failed: {e3}", flush=True)
 
             fallback_attempts += 1
             continue
