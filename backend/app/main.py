@@ -81,6 +81,23 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 
+@app.get("/")
+def root():
+    """
+    Root endpoint so visiting the base URL in a browser shows status instead of 404.
+    """
+    return {
+        "status": "ok",
+        "message": "Lyftr LLM Chatbot Gateway API is running",
+        "endpoints": {
+            "health": "/health",
+            "chat": "POST /chat",
+            "messages": "GET /sessions/{session_id}/messages",
+            "docs": "/docs"
+        }
+    }
+
+
 @app.get("/health", response_model=HealthResponse)
 def health():
     """
