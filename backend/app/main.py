@@ -12,6 +12,8 @@ from fastapi.responses import JSONResponse
 from app.config import settings
 from app.database import (
     add_message,
+    delete_session_messages,
+    get_all_sessions,
     get_connection,
     get_session_messages,
     init_db,
@@ -298,3 +300,20 @@ def get_session_history(session_id: str):
         session_id=session_id,
         messages=messages,
     )
+
+
+@app.get("/sessions")
+def list_sessions():
+    """
+    Returns a list of recent conversation sessions stored in SQLite.
+    """
+    return {"sessions": get_all_sessions()}
+
+
+@app.delete("/sessions/{session_id}")
+def delete_session(session_id: str):
+    """
+    Deletes all messages for a specific session from SQLite.
+    """
+    deleted = delete_session_messages(session_id)
+    return {"status": "ok", "deleted": deleted, "session_id": session_id}

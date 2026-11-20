@@ -188,12 +188,31 @@ export default function App() {
     e.target.value = '';
   };
 
-  // Fetch backend health on mount
+  // Fetch backend health and past sessions on mount
   useEffect(() => {
     fetch(`${API_BASE}/health`)
       .then((res) => res.json())
       .then((data) => setHealthInfo(data))
       .catch((err) => console.error('Health check error:', err));
+
+    // Fetch existing conversation sessions from SQLite backend
+    fetch(`${API_BASE}/sessions`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.sessions && data.sessions.length > 0) {
+          const dbSessions = data.sessions.map((s) => ({
+            id: s.session_id,
+            title: s.title || 'Conversation',
+            timestamp: new Date(s.created_at).getTime(),
+          }));
+          setSessions((prev) => {
+            const existingIds = new Set(prev.map((p) => p.id));
+            const newOnes = dbSessions.filter((d) => !existingIds.has(d.id));
+            return [...prev, ...newOnes];
+          });
+        }
+      })
+      .catch((err) => console.log('Local sessions active:', err));
   }, []);
 
   // Save sessions to localStorage
@@ -225,19 +244,77 @@ export default function App() {
       const title = firstUserMsg ? firstUserMsg.content.slice(0, 32) : 'Conversation';
       setSessions((prev) => [
         { id: sessionId, title: title + '...', timestamp: Date.now() },
-        ...prev.filter((s) => s.id !== sessionId).slice(0, 20),
+        ...prev.filter((s) => s.id !== sessionId).slice(0, 30),
       ]);
     }
     setSessionId(newId);
     setMessages([]);
     setInputMessage('');
+    setAttachedFile(null);
   };
 
   const handleSwitchSession = async (targetId) => {
-    if (targetId === sessionId) return;
+    if (targetId === sessionId && messages.length > 0) return;
     setSessionId(targetId);
     setIsLoading(true);
     try {
+      const res = await fetch(`${API_BASE}/sessions/${targetId}/messages`);
+      if (res.ok) {
+        const data = await res.json();
+        setMessages(
+          data.messages.map((m) => ({
+            role: m.role,
+            content: m.content,
+            metadata: m.metadata || null,
+          }))
+        );
+      } else {
+        setMessages([]);
+      }
+    } catch (e) {
+      console.error('Failed to load session history:', e);
+      setMessages([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteSession = async (e, targetId) => {
+    e.stopPropagation();
+    // Remove from frontend state immediately
+    setSessions((prev) => prev.filter((s) => s.id !== targetId));
+
+    // If the deleted session was currently open, reset to new chat
+    if (targetId === sessionId) {
+      const newId = generateSessionId();
+      setSessionId(newId);
+      setMessages([]);
+      setInputMessage('');
+      setAttachedFile(null);
+    }
+
+    // Delete from SQLite database
+    try {
+      await fetch(`${API_BASE}/sessions/${targetId}`, { method: 'DELETE' });
+    } catch (err) {
+      console.error('Failed to delete session on server:', err);
+    }
+  };
+
+  const handleClearAllSessions = async () => {
+    if (!window.confirm('Delete all past chat history?')) return;
+    const allIds = sessions.map((s) => s.id);
+    setSessions([]);
+    const newId = generateSessionId();
+    setSessionId(newId);
+    setMessages([]);
+    setInputMessage('');
+    setAttachedFile(null);
+
+    for (const id of allIds) {
+      fetch(`${API_BASE}/sessions/${id}`, { method: 'DELETE' }).catch(() => {});
+    }
+  };
       const res = await fetch(`${API_BASE}/sessions/${targetId}/messages`);
       if (res.ok) {
         const data = await res.json();
@@ -411,9 +488,22 @@ export default function App() {
 
         {/* Sessions / Chat History List */}
         <div className="sidebar-history">
-          <div className="history-label">Recent Chats</div>
+          <div className="history-header">
+            <span className="history-label">Recent Chats</span>
+            {sessions.length > 0 && (
+              <button
+                type="button"
+                className="clear-all-link"
+                onClick={handleClearAllSessions}
+                title="Clear all past chats"
+              >
+                Clear all
+              </button>
+            )}
+          </div>
+
           <div
-            className={`history-item active`}
+            className={`history-item ${!sessions.some((s) => s.id === sessionId) ? 'active' : ''}`}
             onClick={() => {}}
           >
             <span className="chat-bubble-icon">💬</span>
@@ -425,9 +515,21 @@ export default function App() {
               key={sess.id}
               className={`history-item ${sess.id === sessionId ? 'active' : ''}`}
               onClick={() => handleSwitchSession(sess.id)}
+              title={`Switch to: ${sess.title}`}
             >
               <span className="chat-bubble-icon">💬</span>
               <span className="chat-title">{sess.title}</span>
+              <button
+                type="button"
+                className="delete-session-btn"
+                onClick={(e) => handleDeleteSession(e, sess.id)}
+                title="Delete this chat"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+              </button>
             </div>
           ))}
         </div>

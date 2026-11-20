@@ -105,3 +105,24 @@ def session_exists(session_id: str) -> bool:
             (session_id,)
         )
         return cursor.fetchone() is not None
+
+
+def delete_session_messages(session_id: str) -> bool:
+    with get_connection() as conn:
+        cursor = conn.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
+        conn.commit()
+        return cursor.rowcount > 0
+
+
+def get_all_sessions() -> List[Dict[str, Any]]:
+    with get_connection() as conn:
+        cursor = conn.execute("""
+            SELECT session_id, content, created_at
+            FROM messages
+            WHERE role = 'user'
+            GROUP BY session_id
+            ORDER BY id DESC
+            LIMIT 50
+        """)
+        rows = cursor.fetchall()
+    return [{"session_id": r["session_id"], "title": r["content"][:32], "created_at": r["created_at"]} for r in rows]

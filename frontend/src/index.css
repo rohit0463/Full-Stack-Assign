@@ -129,28 +129,45 @@ html, body, #root {
   gap: 3px;
 }
 
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px 4px;
+}
+
 .history-label {
   font-size: 0.72rem;
   font-weight: 600;
   text-transform: uppercase;
   color: var(--text-muted);
-  padding: 8px 10px 4px;
   letter-spacing: 0.05em;
+}
+
+.clear-all-link {
+  background: transparent;
+  border: none;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.clear-all-link:hover {
+  color: #ef4444;
 }
 
 .history-item {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 12px;
+  padding: 8px 10px;
   border-radius: 8px;
   cursor: pointer;
   color: var(--text-secondary);
   font-size: 0.86rem;
   transition: background 0.15s ease, color 0.15s ease;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  position: relative;
 }
 
 .history-item:hover {
@@ -162,6 +179,30 @@ html, body, #root {
   background-color: #212121;
   color: var(--text-primary);
   font-weight: 500;
+}
+
+.delete-session-btn {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.history-item:hover .delete-session-btn {
+  opacity: 1;
+}
+
+.delete-session-btn:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.15);
 }
 
 .chat-bubble-icon {
