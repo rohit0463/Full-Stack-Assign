@@ -242,7 +242,7 @@ async def chat(
     )
 
 
-@app.get("/sessions/{session_id}/messages", response_model=SessionHistoryResponse)
+@app.get("/sessions/{session_id}/messages", response_model=SessionHistoryResponse, response_model_exclude_none=True)
 def get_session_history(session_id: str):
     """
     Returns the stored history of one session from SQLite, oldest first, without the system prompt.
