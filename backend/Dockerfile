@@ -30,6 +30,6 @@ ENV DATABASE_URL="sqlite:////data/app.db"
 ENV ALLOWED_ORIGINS="*"
 ENV ENABLE_FAILURE_SIMULATION="true"
 
-EXPOSE 8000
+EXPOSE 8000 10000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
