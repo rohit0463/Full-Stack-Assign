@@ -7,7 +7,7 @@ from app.config import settings
 
 
 def get_db_path() -> str:
-    db_url = settings.DATABASE_URL
+    db_url = os.environ.get("DATABASE_URL", settings.DATABASE_URL)
     if db_url.startswith("sqlite:////"):
         path = "/" + db_url[len("sqlite:////"):]
     elif db_url.startswith("sqlite:///"):
@@ -16,13 +16,15 @@ def get_db_path() -> str:
         path = db_url
 
     if path != ":memory:" and not path.startswith("file:"):
-        # Ensure parent directory exists
         dir_name = os.path.dirname(path)
-        if dir_name and not os.path.exists(dir_name):
+        if dir_name:
             try:
                 os.makedirs(dir_name, exist_ok=True)
-            except OSError:
-                pass
+            except (OSError, PermissionError):
+                # Fallback to local directory if root /data is not permitted
+                local_dir = os.path.abspath("./data")
+                os.makedirs(local_dir, exist_ok=True)
+                path = os.path.join(local_dir, "app.db")
     return path
 
 
