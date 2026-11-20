@@ -315,26 +315,6 @@ export default function App() {
       fetch(`${API_BASE}/sessions/${id}`, { method: 'DELETE' }).catch(() => {});
     }
   };
-      const res = await fetch(`${API_BASE}/sessions/${targetId}/messages`);
-      if (res.ok) {
-        const data = await res.json();
-        setMessages(
-          data.messages.map((m) => ({
-            role: m.role,
-            content: m.content,
-            metadata: m.metadata || null,
-          }))
-        );
-      } else {
-        setMessages([]);
-      }
-    } catch (e) {
-      console.error('Failed to load session history:', e);
-      setMessages([]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleSend = async (e, directText = null, overrideSim = null) => {
     if (e) e.preventDefault();
