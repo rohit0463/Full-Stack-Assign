@@ -20,6 +20,10 @@ except Exception as e:
     cache_enabled = False
 
 
+# Diagnostic tracker for live debugging
+last_provider_error: Optional[str] = None
+
+
 class AllProvidersUnavailable(Exception):
     """Raised when every key in the pool has failed."""
     pass
@@ -165,6 +169,11 @@ async def execute_chat(
         masked_key = f"{api_key[:6]}...{api_key[-4:]}" if len(api_key) > 10 else "***"
         print(f"[GATEWAY] Attempting completion using {key_id} ({masked_key}) with model {current_model}", flush=True)
 
+        if current_model.startswith("groq/") or api_key.startswith("gsk_"):
+            os.environ["GROQ_API_KEY"] = api_key
+        elif current_model.startswith("gemini/") or api_key.startswith("AIzaSy"):
+            os.environ["GEMINI_API_KEY"] = api_key
+
         try:
             # LiteLLM completion
             response = await litellm.acompletion(
@@ -193,6 +202,8 @@ async def execute_chat(
             break
 
         except Exception as e:
+            global last_provider_error
+            last_provider_error = f"{key_id} ({current_model}): {type(e).__name__}: {str(e)}"
             print(f"[GATEWAY] Provider {key_id} failed: {type(e).__name__}: {e}", flush=True)
 
             # If gemini-2.0 failed with 404 or not found, auto-try gemini-1.5-flash

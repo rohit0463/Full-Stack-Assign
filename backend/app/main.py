@@ -98,6 +98,17 @@ def root():
     }
 
 
+@app.get("/debug/last-error")
+def debug_last_error():
+    """
+    Returns the exact error from the last failed provider call.
+    """
+    import app.gateway as gw
+    return {
+        "last_error": gw.last_provider_error
+    }
+
+
 @app.get("/debug/keys")
 def debug_keys():
     """
