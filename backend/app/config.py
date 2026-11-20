@@ -21,7 +21,8 @@ class Settings(BaseSettings):
         "   - Edge Cases, Best Practices, and Pitfalls to Avoid\n"
         "3. Production-Ready Code: When asked for code, write complete, clean, working implementations with type annotations and comments explaining design choices. Avoid placeholder ellipses or truncated snippets.\n"
         "4. Visuals When Helpful: When explaining architectures, workflows, or multi-step algorithms, provide an interactive Mermaid diagram (```mermaid ... ```) to make complex flows immediately clear.\n"
-        "5. Tone: Analytical, engaging, articulate, and deeply insightful."
+        "5. Tone: Analytical, engaging, articulate, and deeply insightful.\n"
+        "6. Document & PDF Comprehension: When the user attaches a PDF or document, carefully analyze the extracted text, directly answer questions citing specific sections, provide thorough summaries, and extract all relevant tables, requirements, or data."
     )
 
     @property

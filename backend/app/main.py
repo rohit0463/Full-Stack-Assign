@@ -210,16 +210,53 @@ async def chat(
             else:
                 llm_messages.append({"role": "user", "content": f"[Uploaded Image: {payload.file.name}]\n{payload.message}"})
         else:
-            # Clean printable text and limit to 3,500 characters to stay within Groq's 8,000 TPM limit
-            raw_text = payload.file.data or ""
-            clean_chars = [c for c in raw_text if c.isprintable() or c in "\n\t "]
+            # Handle PDF documents and text files
+            raw_data = payload.file.data or ""
+            extracted_text = ""
+
+            # Check if this is a base64 encoded PDF payload
+            is_pdf = payload.file.name.lower().endswith(".pdf") or payload.file.type == "application/pdf"
+            if is_pdf and ("base64," in raw_data or raw_data.startswith("JVBER")):
+                try:
+                    import base64
+                    import io
+                    b64_content = raw_data.split("base64,")[-1] if "base64," in raw_data else raw_data
+                    pdf_bytes = base64.b64decode(b64_content)
+                    try:
+                        import pypdf
+                        reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
+                        pages_list = []
+                        for page_idx, page in enumerate(reader.pages[:10]):
+                            t = page.extract_text()
+                            if t and t.strip():
+                                pages_list.append(f"[Page {page_idx + 1}]\n{t.strip()}")
+                        if pages_list:
+                            extracted_text = "\n\n".join(pages_list)
+                    except Exception as pe:
+                        logger.warning(f"Server-side pypdf extraction warning: {pe}")
+                except Exception as b64e:
+                    logger.warning(f"Server-side base64 decode warning: {b64e}")
+
+            if not extracted_text:
+                extracted_text = raw_data
+
+            # Sanitize printable characters and normalize whitespace
+            clean_chars = [c for c in extracted_text if c.isprintable() or c in "\n\t "]
             clean_text = "".join(clean_chars).strip()
             clean_text = re.sub(r"[ \t]+", " ", clean_text)
+            # Cap at 3,500 characters to strictly respect Groq's 8,000 TPM limit
             snippet = clean_text[:3500]
+
             user_db_content = f"📄 [{payload.file.name}]\n{payload.message}"
             llm_messages.append({
                 "role": "user",
-                "content": f"[Attached Document: {payload.file.name}]\n```\n{snippet}\n```\n\n{payload.message}"
+                "content": (
+                    f"The user attached a document named '{payload.file.name}'.\n\n"
+                    f"--- BEGIN DOCUMENT CONTENT ---\n"
+                    f"{snippet}\n"
+                    f"--- END DOCUMENT CONTENT ---\n\n"
+                    f"User Request / Question about this document:\n{payload.message}"
+                ),
             })
     else:
         llm_messages.append({"role": "user", "content": payload.message})

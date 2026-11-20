@@ -146,7 +146,7 @@ export default function App() {
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -163,24 +163,77 @@ export default function App() {
         });
       };
       reader.readAsDataURL(file);
+    } else if (file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf') {
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        let extractedText = '';
+
+        // Extract text page by page using PDF.js if available
+        if (window.pdfjsLib) {
+          try {
+            const loadingTask = window.pdfjsLib.getDocument({ data: arrayBuffer });
+            const pdfDoc = await loadingTask.promise;
+            const maxPages = Math.min(pdfDoc.numPages, 12);
+            const pageTexts = [];
+
+            for (let i = 1; i <= maxPages; i++) {
+              const page = await pdfDoc.getPage(i);
+              const textContent = await page.getTextContent();
+              const pageStr = textContent.items
+                .map((item) => item.str)
+                .join(' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+              if (pageStr) {
+                pageTexts.push(`[Page ${i}]\n${pageStr}`);
+              }
+            }
+            if (pageTexts.length > 0) {
+              extractedText = pageTexts.join('\n\n');
+            }
+          } catch (pdfErr) {
+            console.warn('PDF.js client extraction error, falling back to base64:', pdfErr);
+          }
+        }
+
+        // Base64 fallback for backend pypdf if client extraction was empty
+        let base64Data = '';
+        if (!extractedText) {
+          const bytes = new Uint8Array(arrayBuffer);
+          let binary = '';
+          const len = bytes.byteLength;
+          for (let i = 0; i < len; i++) {
+            binary += String.fromCharCode(bytes[i]);
+          }
+          base64Data = 'data:application/pdf;base64,' + window.btoa(binary);
+        }
+
+        const textSnippet = extractedText
+          ? extractedText.slice(0, 3500)
+          : base64Data;
+
+        setAttachedFile({
+          name: file.name,
+          type: 'application/pdf',
+          size: file.size,
+          data: textSnippet,
+          isImage: false,
+          isPdf: true,
+        });
+      } catch (err) {
+        console.error('PDF file read error:', err);
+      }
     } else {
       const reader = new FileReader();
       reader.onload = () => {
-        let text = reader.result || '';
-        // If it is a PDF or binary file, strip unprintable binary noise to avoid token limits
-        if (file.name.endsWith('.pdf') || file.type === 'application/pdf') {
-          text = text.replace(/[^\x20-\x7E\n\t]/g, ' ').replace(/\s+/g, ' ').trim();
-          text = text.slice(0, 3500);
-        } else {
-          text = text.slice(0, 5000);
-        }
-
+        const text = (reader.result || '').slice(0, 4000);
         setAttachedFile({
           name: file.name,
           type: file.type || 'text/plain',
           size: file.size,
           data: text,
           isImage: false,
+          isPdf: false,
         });
       };
       reader.readAsText(file);
