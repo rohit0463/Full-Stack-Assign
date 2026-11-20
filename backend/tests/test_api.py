@@ -1,16 +1,27 @@
 import os
+import sys
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from fastapi.testclient import TestClient
 
+# Ensure backend root is in sys.path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+TEST_DB_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "test_api.db"))
+if os.path.exists(TEST_DB_FILE):
+    try:
+        os.remove(TEST_DB_FILE)
+    except OSError:
+        pass
+
 # Set test environment before imports
-os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB_FILE}"
 os.environ["LLM_API_KEYS"] = "mock_key_1,mock_key_2,mock_key_3"
 os.environ["ENABLE_FAILURE_SIMULATION"] = "true"
 os.environ["LLM_MODEL"] = "gemini/gemini-2.0-flash"
 
 from app.main import app
-from app.database import init_db
+from app.database import init_db, get_connection
 import app.gateway as gateway
 
 
@@ -20,6 +31,13 @@ def setup_test_db():
     # Clear gateway cache between tests
     gateway._response_cache.clear()
     yield
+    # Cleanup tables
+    try:
+        with get_connection() as conn:
+            conn.execute("DELETE FROM messages")
+            conn.commit()
+    except Exception:
+        pass
 
 
 @pytest.fixture

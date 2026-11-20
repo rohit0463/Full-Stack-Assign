@@ -36,7 +36,7 @@ jobs:
       - name: Run Pytest
         run: |
           cd backend
-          pytest -v
+          python -m pytest -v
 
   deploy-frontend:
     name: Deploy Frontend to GitHub Pages

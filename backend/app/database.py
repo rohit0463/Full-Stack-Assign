@@ -15,19 +15,20 @@ def get_db_path() -> str:
     else:
         path = db_url
 
-    # Ensure parent directory exists
-    dir_name = os.path.dirname(path)
-    if dir_name and not os.path.exists(dir_name):
-        try:
-            os.makedirs(dir_name, exist_ok=True)
-        except OSError:
-            pass
+    if path != ":memory:" and not path.startswith("file:"):
+        # Ensure parent directory exists
+        dir_name = os.path.dirname(path)
+        if dir_name and not os.path.exists(dir_name):
+            try:
+                os.makedirs(dir_name, exist_ok=True)
+            except OSError:
+                pass
     return path
 
 
 def get_connection() -> sqlite3.Connection:
     path = get_db_path()
-    conn = sqlite3.connect(path)
+    conn = sqlite3.connect(path, uri=True if "mode=memory" in path or path.startswith("file:") else False)
     conn.row_factory = sqlite3.Row
     return conn
 
