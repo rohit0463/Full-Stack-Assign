@@ -6,10 +6,10 @@ A resilient, production-ready full-stack AI application featuring LiteLLM multi-
 
 ## 1. Live URLs
 
-- **Live Frontend**: [https://lyftr-llm-chatbot.vercel.app](https://lyftr-llm-chatbot.vercel.app) *(or your deployed Vercel / Cloudflare Pages URL)*
-- **Live Backend API**: [https://lyftr-llm-chatbot-backend.onrender.com](https://lyftr-llm-chatbot-backend.onrender.com) *(or your deployed Render / Railway URL)*
-- **Interactive API Documentation (Swagger)**: `https://lyftr-llm-chatbot-backend.onrender.com/docs`
-- **Health Check**: `https://lyftr-llm-chatbot-backend.onrender.com/health`
+- **Live Frontend**: [https://lyftr-chat-rohit.onrender.com](https://lyftr-chat-rohit.onrender.com)
+- **Live Backend API**: [https://lyftr-backend-rohit.onrender.com](https://lyftr-backend-rohit.onrender.com)
+- **Interactive API Documentation (Swagger)**: [https://lyftr-backend-rohit.onrender.com/docs](https://lyftr-backend-rohit.onrender.com/docs)
+- **Health Check**: [https://lyftr-backend-rohit.onrender.com/health](https://lyftr-backend-rohit.onrender.com/health)
 - **GitHub Repository**: [https://github.com/rohit0463/Full-Stack-Assign](https://github.com/rohit0463/Full-Stack-Assign)
 
 ---
