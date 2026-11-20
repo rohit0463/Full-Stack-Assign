@@ -16,7 +16,14 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [healthInfo, setHealthInfo] = useState(null);
   const [copiedSession, setCopiedSession] = useState(false);
-  const [showDeveloperPanel, setShowDeveloperPanel] = useState(true);
+  const [showDeveloperPanel, setShowDeveloperPanel] = useState(false);
+  const [showMetrics, setShowMetrics] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search);
+      return p.get('metrics') === '1' || p.get('debug') === 'true';
+    }
+    return false;
+  });
   const messagesEndRef = useRef(null);
 
   // Check health and backend connectivity on mount
@@ -159,6 +166,14 @@ export default function App() {
             <code>{sessionId}</code>
             <span>{copiedSession ? '✓' : '📋'}</span>
           </div>
+
+          <button
+            className={`btn-icon-text ${showMetrics ? 'active' : ''}`}
+            onClick={() => setShowMetrics(!showMetrics)}
+            title="Toggle live inference and cache telemetry badges"
+          >
+            {showMetrics ? '📊 Hide Metrics' : '📊 Show Metrics'}
+          </button>
 
           <button
             className="btn-icon-text"
@@ -370,7 +385,11 @@ export default function App() {
                   <div className="assistant-body">{msg.content}</div>
 
                   {msg.metadata && (
-                    <div className="telemetry-ribbon">
+                    <div
+                      className={`telemetry-ribbon ${
+                        !showMetrics ? 'telemetry-hidden' : ''
+                      }`}
+                    >
                       {/* Resolution Source: Exactly LIVE_INFERENCE or LLM_CACHE */}
                       <span
                         className={`telemetry-pill ${

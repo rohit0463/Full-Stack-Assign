@@ -432,6 +432,10 @@ body {
   font-size: 0.73rem;
 }
 
+.telemetry-ribbon.telemetry-hidden {
+  display: none !important;
+}
+
 .telemetry-pill {
   display: inline-flex;
   align-items: center;
