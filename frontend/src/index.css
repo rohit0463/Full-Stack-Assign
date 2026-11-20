@@ -869,3 +869,246 @@ html, body, #root {
     grid-template-columns: 1fr;
   }
 }
+
+/* ==========================================================================
+   Markdown, Code Blocks, Mermaid Diagrams & Image Styling
+   ========================================================================== */
+
+.assistant-markdown {
+  font-size: 0.96rem;
+  line-height: 1.68;
+  color: var(--text-primary);
+  width: 100%;
+}
+
+.assistant-markdown h1,
+.assistant-markdown h2,
+.assistant-markdown h3,
+.assistant-markdown h4 {
+  color: #ffffff;
+  font-weight: 600;
+  margin-top: 1.25rem;
+  margin-bottom: 0.6rem;
+  line-height: 1.35;
+}
+
+.assistant-markdown h1 { font-size: 1.5rem; }
+.assistant-markdown h2 { font-size: 1.3rem; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 4px; }
+.assistant-markdown h3 { font-size: 1.1rem; }
+.assistant-markdown h4 { font-size: 0.98rem; }
+
+.assistant-markdown p {
+  margin-bottom: 0.85rem;
+}
+
+.assistant-markdown p:last-child {
+  margin-bottom: 0;
+}
+
+.assistant-markdown ul,
+.assistant-markdown ol {
+  margin-left: 1.35rem;
+  margin-bottom: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.assistant-markdown li {
+  line-height: 1.6;
+}
+
+.assistant-markdown strong {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.assistant-markdown a {
+  color: #60a5fa;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.assistant-markdown blockquote {
+  border-left: 3px solid #10b981;
+  padding-left: 14px;
+  margin: 12px 0;
+  color: #a1a1aa;
+  font-style: italic;
+  background: rgba(16, 185, 129, 0.05);
+  border-radius: 0 8px 8px 0;
+  padding: 8px 14px;
+}
+
+.assistant-markdown hr {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin: 18px 0;
+}
+
+/* Tables */
+.assistant-markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 14px 0;
+  font-size: 0.88rem;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+}
+
+.assistant-markdown th {
+  background: #282828;
+  color: #ffffff;
+  font-weight: 600;
+  padding: 9px 14px;
+  text-align: left;
+  border: 1px solid var(--border-subtle);
+}
+
+.assistant-markdown td {
+  padding: 8px 14px;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+
+.assistant-markdown tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* Inline Code */
+.assistant-markdown code:not(pre code) {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f1f5f9;
+  padding: 2px 6px;
+  border-radius: 5px;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Code Blocks */
+.code-block-wrapper {
+  background: #181818;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  overflow: hidden;
+  margin: 14px 0;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+}
+
+.code-block-header {
+  background: #252525;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 14px;
+  font-size: 0.76rem;
+  color: #b4b4b4;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.code-lang {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.copy-code-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 5px;
+  color: #d1d5db;
+  font-size: 0.72rem;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.copy-code-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.code-block-wrapper pre {
+  padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.87rem;
+  line-height: 1.55;
+  color: #e2e8f0;
+}
+
+/* Mermaid Diagrams */
+.mermaid-block {
+  background: #181818;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: 12px;
+  padding: 16px;
+  margin: 16px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-x: auto;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+}
+
+.diagram-tag {
+  align-self: flex-start;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.12);
+  padding: 3px 8px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mermaid {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.mermaid svg {
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+/* Image Cards */
+.chatgpt-image-card {
+  margin: 14px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #181818;
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+}
+
+.chatgpt-image-card img {
+  width: 100%;
+  max-height: 480px;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.2s ease;
+}
+
+.chatgpt-image-card img:hover {
+  transform: scale(1.01);
+}
+
+.chatgpt-image-card figcaption {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  padding: 8px 12px;
+  width: 100%;
+  text-align: center;
+  background: #1f1f1f;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}

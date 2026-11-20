@@ -1,10 +1,101 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import './index.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://lyftr-backend-rohit.onrender.com';
 
 function generateSessionId() {
   return 'sess-' + Math.random().toString(36).substring(2, 9) + '-' + Date.now().toString(36);
+}
+
+function escapeHtml(string) {
+  return String(string || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// Markdown and Diagram Renderer with Mermaid and Image Support
+function MarkdownContent({ content }) {
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    // Render Mermaid diagrams dynamically
+    if (window.mermaid) {
+      try {
+        const mermaidEls = containerRef.current.querySelectorAll('.mermaid:not([data-processed="true"])');
+        if (mermaidEls.length > 0) {
+          window.mermaid.run({ nodes: mermaidEls });
+        }
+      } catch (err) {
+        console.warn('Mermaid rendering notice:', err);
+      }
+    }
+  }, [content]);
+
+  const html = useMemo(() => {
+    if (typeof window !== 'undefined' && window.marked) {
+      const renderer = new window.marked.Renderer();
+
+      // Custom code block renderer (supports Mermaid diagrams & copy button)
+      renderer.code = function ({ text, lang }) {
+        const codeText = text || '';
+        const language = (lang || '').toLowerCase().trim();
+
+        if (language === 'mermaid') {
+          return `
+            <div class="mermaid-block">
+              <div class="diagram-tag">📊 Visual Diagram</div>
+              <div class="mermaid">${escapeHtml(codeText)}</div>
+            </div>
+          `;
+        }
+
+        const encoded = encodeURIComponent(codeText);
+        return `
+          <div class="code-block-wrapper">
+            <div class="code-block-header">
+              <span class="code-lang">${language || 'code'}</span>
+              <button class="copy-code-btn" onclick="navigator.clipboard.writeText(decodeURIComponent('${encoded}')); this.innerText='✓ Copied'; setTimeout(() => this.innerText='Copy code', 2000);">
+                Copy code
+              </button>
+            </div>
+            <pre><code class="language-${language}">${escapeHtml(codeText)}</code></pre>
+          </div>
+        `;
+      };
+
+      // Custom image renderer with modern card wrapper
+      renderer.image = function ({ href, title, text }) {
+        const altText = text || title || 'Visual depiction';
+        return `
+          <figure class="chatgpt-image-card">
+            <img src="${href}" alt="${escapeHtml(altText)}" loading="lazy" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format&fit=crop&w=800&q=80';" />
+            <figcaption>${escapeHtml(altText)}</figcaption>
+          </figure>
+        `;
+      };
+
+      try {
+        return window.marked.parse(content, { renderer, gfm: true, breaks: true });
+      } catch (e) {
+        console.error('Marked parse error:', e);
+        return `<p>${escapeHtml(content)}</p>`;
+      }
+    }
+    return `<p>${escapeHtml(content)}</p>`;
+  }, [content]);
+
+  return (
+    <div
+      ref={containerRef}
+      className="assistant-markdown"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
 }
 
 export default function App() {
@@ -67,7 +158,6 @@ export default function App() {
 
   const handleNewSession = () => {
     const newId = generateSessionId();
-    // Add current session to sidebar if it has messages
     if (messages.length > 0) {
       const firstUserMsg = messages.find((m) => m.role === 'user');
       const title = firstUserMsg ? firstUserMsg.content.slice(0, 32) : 'Conversation';
@@ -365,37 +455,37 @@ export default function App() {
                 <div className="prompt-grid">
                   <div
                     className="prompt-card"
-                    onClick={() => handleSend(null, 'Explain Quantum Computing in two clear sentences.')}
+                    onClick={() => handleSend(null, 'Draw a clear Mermaid flowchart diagram showing how an LLM Gateway with automated key failover and response caching works.')}
                   >
-                    <span className="prompt-title">Explain Quantum Computing</span>
-                    <span className="prompt-sub">in two simple sentences</span>
+                    <span className="prompt-title">📊 Visual Diagram: LLM Gateway</span>
+                    <span className="prompt-sub">Render interactive Mermaid flowchart</span>
+                  </div>
+
+                  <div
+                    className="prompt-card"
+                    onClick={() => handleSend(null, 'Show a breathtaking image of the Aurora Borealis glowing in the northern sky and explain the science behind it.')}
+                  >
+                    <span className="prompt-title">🎨 Image: Aurora Borealis</span>
+                    <span className="prompt-sub">Generate visual depiction + article</span>
                   </div>
 
                   <div
                     className="prompt-card"
                     onClick={() => handleSend(null, 'What is machine learning in one sentence?')}
                   >
-                    <span className="prompt-title">Test Cache Hit (1 ms)</span>
-                    <span className="prompt-sub">Send twice to see instant cache</span>
+                    <span className="prompt-title">⚡ Test 1ms Cache Hit</span>
+                    <span className="prompt-sub">Instant response with 0 token cost</span>
                   </div>
 
                   <div
                     className="prompt-card"
                     onClick={() => {
                       setSimulationHeader('key_1=429');
-                      handleSend(null, 'Tell me a fascinating fact about Mars.', 'key_1=429');
+                      handleSend(null, 'Explain binary search with a clean Java code implementation.', 'key_1=429');
                     }}
                   >
-                    <span className="prompt-title">Simulate 429 Failover</span>
+                    <span className="prompt-title">🛡️ Key Failover (429) + Java Code</span>
                     <span className="prompt-sub">Fallback smoothly to key_2</span>
-                  </div>
-
-                  <div
-                    className="prompt-card"
-                    onClick={() => handleSend(null, 'Write a clean Python FastAPI health endpoint with pydantic.')}
-                  >
-                    <span className="prompt-title">Write a Python Endpoint</span>
-                    <span className="prompt-sub">FastAPI + Pydantic model</span>
                   </div>
                 </div>
               </div>
@@ -438,7 +528,8 @@ export default function App() {
                       </div>
 
                       <div className="assistant-content" data-testid="assistant-message">
-                        <div className="assistant-text">{msg.content}</div>
+                        {/* Rich Markdown with Mermaid & Image Support */}
+                        <MarkdownContent content={msg.content} />
 
                         {/* Subtle ChatGPT Action Bar */}
                         <div className="msg-actions">
@@ -562,7 +653,7 @@ export default function App() {
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Message Aurora AI..."
+              placeholder="Message Aurora AI... (Ask for diagrams, code, or images)"
               data-testid="chat-input"
               disabled={isLoading}
             />
