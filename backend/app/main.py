@@ -98,6 +98,27 @@ def root():
     }
 
 
+@app.get("/debug/groq-models")
+async def debug_groq_models():
+    """
+    Query Groq models API with key_1 to find supported model IDs.
+    """
+    import httpx
+    keys = settings.api_key_list
+    if not keys:
+        return {"error": "no keys"}
+    key = keys[0]
+    async with httpx.AsyncClient() as client:
+        try:
+            r = await client.get(
+                "https://api.groq.com/openai/v1/models",
+                headers={"Authorization": f"Bearer {key}"}
+            )
+            return r.json()
+        except Exception as e:
+            return {"error": str(e)}
+
+
 @app.get("/debug/last-error")
 def debug_last_error():
     """
