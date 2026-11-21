@@ -207,7 +207,12 @@ export default function App() {
     // Setup MediaRecorder for fail-safe audio transcription
     if (stream && typeof MediaRecorder !== 'undefined') {
       try {
-        const mediaRecorder = new MediaRecorder(stream);
+        const supportedType = MediaRecorder.isTypeSupported('audio/webm')
+          ? 'audio/webm'
+          : (MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '');
+        const options = supportedType ? { mimeType: supportedType } : undefined;
+        const mediaRecorder = new MediaRecorder(stream, options);
+
         mediaRecorder.ondataavailable = (e) => {
           if (e.data && e.data.size > 0) {
             audioChunksRef.current.push(e.data);
@@ -230,11 +235,11 @@ export default function App() {
         recognition.lang = navigator.language || 'en-US';
 
         recognition.onresult = (event) => {
-          let currentSessionText = '';
+          let str = '';
           for (let i = 0; i < event.results.length; i++) {
-            currentSessionText += event.results[i][0].transcript + ' ';
+            str += event.results[i][0].transcript + ' ';
           }
-          const text = (liveTranscriptRef.current + currentSessionText).replace(/\s+/g, ' ').trim();
+          const text = (liveTranscriptRef.current + str).replace(/\s+/g, ' ').trim();
           if (text) {
             setInputMessage(text);
             if (textareaRef.current) {
@@ -264,7 +269,7 @@ export default function App() {
   const stopVoiceRecording = async (autoSubmit = false) => {
     setIsRecording(false);
 
-    // Stop SpeechRecognition
+    // 1. Stop SpeechRecognition
     if (recognitionRef.current) {
       try {
         recognitionRef.current.onend = null;
@@ -273,27 +278,40 @@ export default function App() {
       recognitionRef.current = null;
     }
 
-    // Stop MediaRecorder and audio stream
+    // 2. Stop MediaRecorder and wait for the final data chunk to flush
+    let mimeType = 'audio/webm';
     if (mediaRecorderRef.current) {
-      try {
-        if (mediaRecorderRef.current.state !== 'inactive') {
-          mediaRecorderRef.current.stop();
+      mimeType = mediaRecorderRef.current.mimeType || 'audio/webm';
+      await new Promise((resolve) => {
+        if (mediaRecorderRef.current.state === 'inactive') {
+          resolve();
+          return;
         }
-        mediaRecorderRef.current.stream?.getTracks().forEach((track) => track.stop());
-      } catch (e) {}
+        mediaRecorderRef.current.onstop = () => {
+          try {
+            mediaRecorderRef.current.stream?.getTracks().forEach((track) => track.stop());
+          } catch (e) {}
+          resolve();
+        };
+        try {
+          mediaRecorderRef.current.stop();
+        } catch (e) {
+          resolve();
+        }
+      });
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 200));
-
+    // 3. Check what was captured live
     let finalQuery = (inputMessage || '').trim();
 
-    // If client SpeechRecognition did not transcribe any text, send audio to Groq Whisper fallback
+    // 4. If speech recognition didn't transcribe any words, send audio to Groq Whisper
     if (!finalQuery && audioChunksRef.current.length > 0) {
       try {
         setIsTranscribing(true);
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const ext = mimeType.includes('mp4') ? 'voice.mp4' : (mimeType.includes('wav') ? 'voice.wav' : 'voice.webm');
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
         const formData = new FormData();
-        formData.append('file', audioBlob, 'voice_query.webm');
+        formData.append('file', audioBlob, ext);
 
         const res = await fetch(`${API_BASE}/transcribe`, {
           method: 'POST',
@@ -311,12 +329,13 @@ export default function App() {
           }
         }
       } catch (transcribeErr) {
-        console.warn('Whisper fallback error:', transcribeErr);
+        console.warn('Whisper fallback notice:', transcribeErr);
       } finally {
         setIsTranscribing(false);
       }
     }
 
+    // 5. If search was requested and we have text, execute immediately!
     if (autoSubmit && finalQuery) {
       setTimeout(() => {
         handleSend(null, finalQuery);
