@@ -666,19 +666,21 @@ html, body, #root {
 
 .chatgpt-input-box {
   width: 100%;
-  background-color: var(--bg-input);
-  border: 1px solid var(--border-subtle);
-  border-radius: 26px;
+  background: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  border-radius: 28px;
   display: flex;
   align-items: flex-end;
-  padding: 10px 14px 10px 18px;
-  gap: 10px;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  padding: 11px 14px 11px 18px;
+  gap: 12px;
+  box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.25);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .chatgpt-input-box:focus-within {
-  border-color: var(--border-focus);
-  box-shadow: 0 0 0 1px var(--border-focus);
+  border-color: #ffffff;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.35), 0 16px 40px rgba(0, 0, 0, 0.6);
+  transform: translateY(-1px);
 }
 
 .chatgpt-input-box textarea {
@@ -686,45 +688,48 @@ html, body, #root {
   background: transparent;
   border: none;
   outline: none;
-  color: var(--text-primary);
+  color: #0f172a;
   font-family: var(--font-sans);
   font-size: 0.96rem;
+  font-weight: 500;
   line-height: 1.5;
   resize: none;
   max-height: 200px;
   overflow-y: auto;
-  padding: 2px 0;
+  padding: 3px 0;
 }
 
 .chatgpt-input-box textarea::placeholder {
-  color: var(--text-muted);
+  color: #64748b;
+  font-weight: 400;
 }
 
-/* Circular Send Button (Iconic ChatGPT Arrow) */
+/* Circular Send Button (Iconic Contrast Arrow) */
 .send-circle-btn {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   border: none;
-  background-color: #424242; /* Disabled state */
-  color: #171717;
+  background-color: #e2e8f0; /* Soft disabled slate */
+  color: #94a3b8;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: not-allowed;
   flex-shrink: 0;
-  transition: all 0.15s ease;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .send-circle-btn.ready {
-  background-color: #ffffff; /* Enabled state */
-  color: #000000;
+  background-color: #0f172a; /* Deep charcoal/black button for striking high-contrast pop */
+  color: #ffffff;
   cursor: pointer;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.35);
 }
 
 .send-circle-btn.ready:hover {
-  opacity: 0.88;
-  transform: scale(1.04);
+  background-color: #1e293b;
+  transform: scale(1.06);
 }
 
 .input-disclaimer {
@@ -1181,7 +1186,7 @@ html, body, #root {
 .attach-btn {
   background: transparent;
   border: none;
-  color: var(--text-muted);
+  color: #64748b;
   cursor: pointer;
   padding: 6px;
   border-radius: 50%;
@@ -1194,8 +1199,8 @@ html, body, #root {
 }
 
 .attach-btn:hover {
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.08);
+  color: #0f172a;
+  background: rgba(0, 0, 0, 0.08);
 }
 
 .attachment-chip {
@@ -1203,12 +1208,13 @@ html, body, #root {
   display: flex;
   align-items: center;
   gap: 10px;
-  background: #1f1f1f;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 12px;
-  padding: 6px 12px;
+  background: #ffffff;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 14px;
+  padding: 6px 14px;
   margin-bottom: 8px;
   max-width: 90%;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
   animation: fadeIn 0.2s ease-in-out;
 }
 
@@ -1234,8 +1240,8 @@ html, body, #root {
 
 .chip-name {
   font-size: 0.82rem;
-  font-weight: 500;
-  color: var(--text-primary);
+  font-weight: 600;
+  color: #0f172a;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1243,13 +1249,13 @@ html, body, #root {
 
 .chip-size {
   font-size: 0.7rem;
-  color: var(--text-muted);
+  color: #64748b;
 }
 
 .chip-remove-btn {
   background: transparent;
   border: none;
-  color: var(--text-muted);
+  color: #64748b;
   cursor: pointer;
   font-size: 0.85rem;
   padding: 4px;
