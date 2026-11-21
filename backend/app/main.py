@@ -293,6 +293,38 @@ async def chat(
     reply = result["reply"]
     metadata = result["metadata"]
 
+    # Enhance with photorealistic images if requested and not already present
+    user_query_lower = payload.message.lower()
+    if any(trig in user_query_lower for trig in ["photo", "picture", "portrait", "image of", "show me"]) and "![" not in reply:
+        import urllib.parse
+        clean_subj = payload.message
+        for p in [
+            "show me a photo of", "show me an image of", "show me a picture of",
+            "show me photo of", "show me image of", "picture of", "photo of",
+            "image of", "portrait of", "generate an image of", "show me"
+        ]:
+            if p in clean_subj.lower():
+                pos = clean_subj.lower().find(p)
+                clean_subj = clean_subj[pos + len(p):].strip(" .?!,")
+                break
+
+        clean_subj = clean_subj.split("?")[0].split("\n")[0].split(" and ")[0].strip()
+        if len(clean_subj) >= 2:
+            enc = urllib.parse.quote(f"{clean_subj} portrait photorealistic realistic detailed 8k")
+            img_card = f"![{clean_subj.title()}](https://image.pollinations.ai/prompt/{enc}?width=800&height=500&nologo=true)\n\n"
+            # Strip standard LLM refusal lines if present
+            lines = reply.split("\n")
+            filtered = [
+                l for l in lines
+                if not any(ap in l.lower() for ap in [
+                    "can't provide a photo", "cannot provide a photo",
+                    "can't provide an image", "cannot provide an image",
+                    "can't show a photo", "cannot show a photo",
+                    "unable to provide photos", "unable to display images"
+                ])
+            ]
+            reply = img_card + "\n".join(filtered).strip()
+
     # 4. Only persist to SQLite upon successful completion
     # Store user message
     add_message(
