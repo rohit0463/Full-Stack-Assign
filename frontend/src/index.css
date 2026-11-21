@@ -1108,15 +1108,35 @@ html, body, #root {
   letter-spacing: 0.04em;
 }
 
-.mermaid {
+.mermaid,
+.mermaid-target {
   width: 100%;
   display: flex;
   justify-content: center;
+  align-items: center;
+  overflow-x: auto;
 }
 
-.mermaid svg {
+.mermaid svg,
+.mermaid-target svg {
   max-width: 100% !important;
   height: auto !important;
+}
+
+.mermaid-fallback-card {
+  width: 100%;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 8px;
+}
+
+.mermaid-clean-code {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: #a7f3d0;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* Image Cards */

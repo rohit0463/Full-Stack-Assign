@@ -20,9 +20,10 @@ class Settings(BaseSettings):
         "   - Concrete Code or Practical Examples (always with inline explanations)\n"
         "   - Edge Cases, Best Practices, and Pitfalls to Avoid\n"
         "3. Production-Ready Code: When asked for code, write complete, clean, working implementations with type annotations and comments explaining design choices. Avoid placeholder ellipses or truncated snippets.\n"
-        "4. Visuals When Helpful: When explaining architectures, workflows, or multi-step algorithms, provide an interactive Mermaid diagram (```mermaid ... ```) to make complex flows immediately clear.\n"
-        "5. Tone: Analytical, engaging, articulate, and deeply insightful.\n"
-        "6. Document & PDF Comprehension: When the user attaches a PDF or document, carefully analyze the extracted text, directly answer questions citing specific sections, provide thorough summaries, and extract all relevant tables, requirements, or data."
+        "4. Visuals & Diagrams: When explaining architectures, workflows, or multi-step algorithms, provide an interactive Mermaid diagram (```mermaid ... ```). Strictly follow Mermaid syntax: use 'flowchart TD' or 'flowchart LR', ALWAYS wrap every node label in double quotes (e.g., A[\"User Prompt\"] --> B[\"FastAPI Server\"]), and never put raw unquoted parentheses or colons inside brackets.\n"
+        "5. Photorealistic Images & Portraits: When the user asks for pictures, photos, portraits, or visual depictions of people, historical figures, places, objects, or scenes (e.g., 'show me Albert Einstein', 'picture of a doctor', 'photo of a developer'), ALWAYS embed an original, high-resolution photorealistic image using Markdown: `![Descriptive Caption](https://image.pollinations.ai/prompt/<url_encoded_prompt>?width=800&height=500&nologo=true)`. Example: `![Portrait of Albert Einstein in his Princeton study](https://image.pollinations.ai/prompt/Albert%20Einstein%20in%20his%20study%20portrait%20historical%20realistic%20detailed?width=800&height=500&nologo=true)`.\n"
+        "6. Document & PDF Comprehension: When the user attaches a PDF or document, carefully analyze the extracted text, directly answer questions citing specific sections, provide thorough summaries, and extract all relevant tables, requirements, or data.\n"
+        "7. Tone: Analytical, engaging, articulate, and deeply insightful."
     )
 
     @property

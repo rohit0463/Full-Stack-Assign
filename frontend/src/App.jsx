@@ -21,19 +21,51 @@ function MarkdownContent({ content }) {
   const containerRef = useRef(null);
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!containerRef.current || !window.mermaid) return;
 
-    // Render Mermaid diagrams dynamically
-    if (window.mermaid) {
+    const mermaidEls = containerRef.current.querySelectorAll('.mermaid-target:not([data-rendered="true"])');
+    mermaidEls.forEach(async (el, idx) => {
+      el.setAttribute('data-rendered', 'true');
+      const rawEncoded = el.getAttribute('data-code');
+      let rawCode = rawEncoded ? decodeURIComponent(rawEncoded) : el.textContent;
+
+      // 1. Unescape any HTML entities if present
+      let cleanCode = rawCode
+        .replace(/&gt;/g, '>')
+        .replace(/&lt;/g, '<')
+        .replace(/&quot;/g, '"')
+        .replace(/&#039;/g, "'")
+        .replace(/&amp;/g, '&')
+        .trim();
+
+      // 2. Ensure diagram header exists
+      if (!/^(flowchart|graph|sequenceDiagram|classDiagram|stateDiagram|erDiagram|journey|gantt|pie|gitGraph)/i.test(cleanCode)) {
+        cleanCode = 'flowchart TD\n' + cleanCode;
+      }
+
+      // 3. Auto-fix unquoted labels containing parentheses or colons inside brackets:
+      // e.g. A[User (Client)] -> A["User (Client)"]
+      cleanCode = cleanCode.replace(/\[([^"\]\n]*[\(:\/][^"\]\n]*)\]/g, '["$1"]');
+
+      const id = 'mermaid-svg-' + Math.random().toString(36).substring(2, 9) + '-' + idx;
+
       try {
-        const mermaidEls = containerRef.current.querySelectorAll('.mermaid:not([data-processed="true"])');
-        if (mermaidEls.length > 0) {
-          window.mermaid.run({ nodes: mermaidEls });
-        }
+        const { svg } = await window.mermaid.render(id, cleanCode);
+        el.innerHTML = svg;
       } catch (err) {
         console.warn('Mermaid rendering notice:', err);
+        // Suppress and clean up any error elements injected into DOM by Mermaid
+        const stray = document.getElementById('d' + id) || document.querySelector('#' + id);
+        if (stray) stray.remove();
+
+        // Render clean, readable fallback diagram
+        el.innerHTML = `
+          <div class="mermaid-fallback-card">
+            <pre class="mermaid-clean-code"><code>${escapeHtml(cleanCode)}</code></pre>
+          </div>
+        `;
       }
-    }
+    });
   }, [content]);
 
   const html = useMemo(() => {
@@ -54,10 +86,13 @@ function MarkdownContent({ content }) {
         }
 
         if (language === 'mermaid') {
+          const encoded = encodeURIComponent(codeText);
           return `
             <div class="mermaid-block">
-              <div class="diagram-tag">📊 Visual Diagram</div>
-              <div class="mermaid">${escapeHtml(codeText)}</div>
+              <div class="diagram-tag">📊 Visual Flowchart</div>
+              <div class="mermaid-target" data-code="${encoded}">
+                <pre class="mermaid-clean-code"><code>${escapeHtml(codeText)}</code></pre>
+              </div>
             </div>
           `;
         }
