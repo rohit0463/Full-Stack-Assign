@@ -312,18 +312,24 @@ async def chat(
         if len(clean_subj) >= 2:
             enc = urllib.parse.quote(f"{clean_subj} portrait photorealistic realistic detailed 8k")
             img_card = f"![{clean_subj.title()}](https://image.pollinations.ai/prompt/{enc}?width=800&height=500&nologo=true)\n\n"
-            # Strip standard LLM refusal lines if present
-            lines = reply.split("\n")
-            filtered = [
-                l for l in lines
-                if not any(ap in l.lower() for ap in [
+            # Strip standard LLM refusal lines if present (handling unicode apostrophes and spaces)
+            cleaned_lines = []
+            for l in reply.split("\n"):
+                norm = re.sub(r"[’‘]", "'", l.lower()).replace("\u202f", " ").replace("\xa0", " ")
+                if any(ap in norm for ap in [
                     "can't provide a photo", "cannot provide a photo",
                     "can't provide an image", "cannot provide an image",
                     "can't show a photo", "cannot show a photo",
-                    "unable to provide photos", "unable to display images"
-                ])
-            ]
-            reply = img_card + "\n".join(filtered).strip()
+                    "can't provide photos", "cannot provide photos",
+                    "unable to provide photos", "unable to display images",
+                    "i'm sorry, but i can't", "i am sorry, but i cannot"
+                ]):
+                    if "however" in norm:
+                        idx_how = norm.find("however")
+                        cleaned_lines.append(l[idx_how:].capitalize())
+                    continue
+                cleaned_lines.append(l)
+            reply = img_card + "\n".join(cleaned_lines).strip()
 
     # 4. Only persist to SQLite upon successful completion
     # Store user message
