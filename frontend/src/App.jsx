@@ -181,96 +181,146 @@ export default function App() {
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const recognitionRef = useRef(null);
-  const shouldRecordRef = useRef(false);
-  const baseTextRef = useRef('');
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const liveTranscriptRef = useRef('');
 
-  const startVoiceRecording = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert('Voice recording is not supported in this browser. Please use Google Chrome, Microsoft Edge, or Safari.');
+  const startVoiceRecording = async () => {
+    // 1. Request microphone stream
+    let stream = null;
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+    } catch (permErr) {
+      console.warn('Microphone permission notice:', permErr);
+      alert('Microphone access was denied. Please allow microphone permissions in your browser address bar.');
       return;
     }
 
-    shouldRecordRef.current = true;
-    baseTextRef.current = inputMessage ? inputMessage.trim() + ' ' : '';
     setIsRecording(true);
+    liveTranscriptRef.current = inputMessage ? inputMessage.trim() + ' ' : '';
+    audioChunksRef.current = [];
 
-    const runRecognition = () => {
+    // Setup MediaRecorder for fail-safe audio transcription
+    if (stream && typeof MediaRecorder !== 'undefined') {
+      try {
+        const mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) {
+            audioChunksRef.current.push(e.data);
+          }
+        };
+        mediaRecorderRef.current = mediaRecorder;
+        mediaRecorder.start(250);
+      } catch (recErr) {
+        console.warn('MediaRecorder init notice:', recErr);
+      }
+    }
+
+    // 2. Setup live client SpeechRecognition for real-time visual typing in textarea
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
       try {
         const recognition = new SpeechRecognition();
         recognition.continuous = true;
         recognition.interimResults = true;
-        recognition.maxAlternatives = 1;
         recognition.lang = navigator.language || 'en-US';
-
-        recognition.onstart = () => {
-          setIsRecording(true);
-        };
 
         recognition.onresult = (event) => {
           let currentSessionText = '';
           for (let i = 0; i < event.results.length; i++) {
             currentSessionText += event.results[i][0].transcript + ' ';
           }
-
-          const combined = (baseTextRef.current + currentSessionText).replace(/\s+/g, ' ').trim();
-          if (combined) {
-            setInputMessage(combined);
+          const text = (liveTranscriptRef.current + currentSessionText).replace(/\s+/g, ' ').trim();
+          if (text) {
+            setInputMessage(text);
+            if (textareaRef.current) {
+              textareaRef.current.value = text;
+            }
           }
         };
 
-        recognition.onerror = (event) => {
-          console.warn('Speech recognition status:', event.error);
-          if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-            shouldRecordRef.current = false;
-            setIsRecording(false);
-            alert('Microphone access was denied. Please allow microphone permissions in your browser address bar.');
-          }
+        recognition.onerror = (e) => {
+          console.warn('Live speech recognition notice:', e.error);
         };
 
         recognition.onend = () => {
-          if (shouldRecordRef.current) {
-            baseTextRef.current = inputMessage ? inputMessage.trim() + ' ' : '';
-            try {
-              recognition.start();
-            } catch (e) {
-              setTimeout(() => {
-                if (shouldRecordRef.current) runRecognition();
-              }, 100);
-            }
-          } else {
-            setIsRecording(false);
+          if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+            try { recognition.start(); } catch (err) {}
           }
         };
 
         recognitionRef.current = recognition;
         recognition.start();
-      } catch (err) {
-        console.warn('Recognition init exception, retrying:', err);
-        if (shouldRecordRef.current) {
-          setTimeout(() => {
-            if (shouldRecordRef.current) runRecognition();
-          }, 150);
-        }
+      } catch (speechErr) {
+        console.warn('WebSpeech init warning:', speechErr);
       }
-    };
-
-    runRecognition();
+    }
   };
 
-  const stopVoiceRecording = (autoSubmit = false) => {
-    shouldRecordRef.current = false;
+  const stopVoiceRecording = async (autoSubmit = false) => {
     setIsRecording(false);
+
+    // Stop SpeechRecognition
     if (recognitionRef.current) {
       try {
+        recognitionRef.current.onend = null;
         recognitionRef.current.stop();
       } catch (e) {}
+      recognitionRef.current = null;
     }
-    if (autoSubmit) {
+
+    // Stop MediaRecorder and audio stream
+    if (mediaRecorderRef.current) {
+      try {
+        if (mediaRecorderRef.current.state !== 'inactive') {
+          mediaRecorderRef.current.stop();
+        }
+        mediaRecorderRef.current.stream?.getTracks().forEach((track) => track.stop());
+      } catch (e) {}
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    let finalQuery = (inputMessage || '').trim();
+
+    // If client SpeechRecognition did not transcribe any text, send audio to Groq Whisper fallback
+    if (!finalQuery && audioChunksRef.current.length > 0) {
+      try {
+        setIsTranscribing(true);
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const formData = new FormData();
+        formData.append('file', audioBlob, 'voice_query.webm');
+
+        const res = await fetch(`${API_BASE}/transcribe`, {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.text && data.text.trim()) {
+            finalQuery = data.text.trim();
+            setInputMessage(finalQuery);
+            if (textareaRef.current) {
+              textareaRef.current.value = finalQuery;
+            }
+          }
+        }
+      } catch (transcribeErr) {
+        console.warn('Whisper fallback error:', transcribeErr);
+      } finally {
+        setIsTranscribing(false);
+      }
+    }
+
+    if (autoSubmit && finalQuery) {
       setTimeout(() => {
-        handleSend();
-      }, 150);
+        handleSend(null, finalQuery);
+      }, 100);
     }
   };
 
@@ -1028,32 +1078,38 @@ export default function App() {
 
         {/* ChatGPT Bottom Dock */}
         <div className="chatgpt-input-wrapper">
-          {isRecording && (
+          {(isRecording || isTranscribing) && (
             <div className="voice-recording-pill">
               <span className="recording-dot" />
               <span className="recording-status">
-                {inputMessage ? (
+                {isTranscribing ? (
+                  'Transcribing audio with Whisper...'
+                ) : inputMessage ? (
                   <>Transcribed: <strong>"{inputMessage}"</strong></>
                 ) : (
                   'Listening to your voice... Speak now'
                 )}
               </span>
-              <button
-                type="button"
-                onClick={() => stopVoiceRecording(true)}
-                className="search-mic-btn"
-                title="Stop and search immediately"
-              >
-                🔍 Search
-              </button>
-              <button
-                type="button"
-                onClick={() => stopVoiceRecording(false)}
-                className="stop-mic-btn"
-                title="Stop recording and review"
-              >
-                Done
-              </button>
+              {!isTranscribing && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => stopVoiceRecording(true)}
+                    className="search-mic-btn"
+                    title="Stop and search immediately"
+                  >
+                    🔍 Search
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => stopVoiceRecording(false)}
+                    className="stop-mic-btn"
+                    title="Stop recording and review"
+                  >
+                    Done
+                  </button>
+                </>
+              )}
             </div>
           )}
 

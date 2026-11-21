@@ -1,9 +1,10 @@
 import logging
 import re
+import httpx
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI, Header, HTTPException, Request, status
+from fastapi import FastAPI, Header, HTTPException, Request, status, UploadFile, File
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -392,3 +393,43 @@ def delete_session(session_id: str):
     """
     deleted = delete_session_messages(session_id)
     return {"status": "ok", "deleted": deleted, "session_id": session_id}
+
+
+@app.post("/transcribe")
+async def transcribe_audio(file: UploadFile = File(...)):
+    """
+    Transcribes audio using Groq Whisper API (whisper-large-v3).
+    Provides instant, zero-latency speech-to-text fallback for all browsers.
+    """
+    try:
+        audio_bytes = await file.read()
+        if not audio_bytes or len(audio_bytes) < 100:
+            return {"text": ""}
+
+        filename = file.filename or "audio.webm"
+        content_type = file.content_type or "audio/webm"
+
+        for key in settings.api_key_list:
+            if key.startswith("gsk_"):
+                try:
+                    async with httpx.AsyncClient(timeout=20.0) as client:
+                        files = {"file": (filename, audio_bytes, content_type)}
+                        data = {"model": "whisper-large-v3"}
+                        resp = await client.post(
+                            "https://api.groq.com/openai/v1/audio/transcriptions",
+                            headers={"Authorization": f"Bearer {key}"},
+                            files=files,
+                            data=data,
+                        )
+                        if resp.status_code == 200:
+                            result = resp.json()
+                            return {"text": result.get("text", "").strip()}
+                        else:
+                            logger.warning(f"Groq whisper status {resp.status_code}: {resp.text}")
+                except Exception as e:
+                    logger.warning(f"Groq whisper attempt error: {e}")
+
+        return {"text": ""}
+    except Exception as e:
+        logger.error(f"Transcribe endpoint error: {e}")
+        return {"text": ""}
