@@ -182,120 +182,116 @@ export default function App() {
   const fileInputRef = useRef(null);
   const [isRecording, setIsRecording] = useState(false);
   const recognitionRef = useRef(null);
+  const shouldRecordRef = useRef(false);
+  const accumulatedTextRef = useRef('');
 
-  const toggleRecording = () => {
-    if (isRecording) {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
-      setIsRecording(false);
-      return;
-    }
-
+  const startVoiceRecording = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert('Voice search is not supported in this browser. Please use Google Chrome, Microsoft Edge, or Safari.');
+      alert('Voice recording is not supported in this browser. Please use Google Chrome, Microsoft Edge, or Safari.');
       return;
     }
 
-    try {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = navigator.language || 'en-US';
+    // Initialize state
+    shouldRecordRef.current = true;
+    accumulatedTextRef.current = inputMessage ? inputMessage.trim() + ' ' : '';
+    setIsRecording(true);
 
-      recognition.onstart = () => {
-        setIsRecording(true);
-      };
+    const initRecognition = () => {
+      try {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.maxAlternatives = 1;
+        recognition.lang = navigator.language || 'en-US';
 
-      recognition.onresult = (event) => {
-        let transcript = '';
-        for (let i = 0; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
+        recognition.onstart = () => {
+          setIsRecording(true);
+        };
+
+        recognition.onresult = (event) => {
+          let interim = '';
+          let finalChunk = '';
+
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+              finalChunk += transcript + ' ';
+            } else {
+              interim += transcript;
+            }
+          }
+
+          if (finalChunk) {
+            accumulatedTextRef.current += finalChunk;
+          }
+
+          const combined = (accumulatedTextRef.current + interim).replace(/\s+/g, ' ').trim();
+          if (combined) {
+            setInputMessage(combined);
+          }
+        };
+
+        recognition.onerror = (event) => {
+          console.warn('Speech recognition notice:', event.error);
+          if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+            shouldRecordRef.current = false;
+            setIsRecording(false);
+            alert('Microphone access was denied. Please allow microphone permission in your browser address bar.');
+          }
+        };
+
+        recognition.onend = () => {
+          // If the user hasn't explicitly clicked stop, automatically keep recording across pauses
+          if (shouldRecordRef.current) {
+            try {
+              recognition.start();
+            } catch (e) {
+              // Re-instantiate if needed
+              setTimeout(() => {
+                if (shouldRecordRef.current) initRecognition();
+              }, 100);
+            }
+          } else {
+            setIsRecording(false);
+          }
+        };
+
+        recognitionRef.current = recognition;
+        recognition.start();
+      } catch (err) {
+        console.warn('Recognition start exception, retrying:', err);
+        if (shouldRecordRef.current) {
+          setTimeout(() => {
+            if (shouldRecordRef.current) initRecognition();
+          }, 200);
         }
-        if (transcript.trim()) {
-          setInputMessage(transcript);
-        }
-      };
+      }
+    };
 
-      recognition.onerror = (event) => {
-        console.warn('Speech recognition notice:', event.error);
-        setIsRecording(false);
-      };
+    initRecognition();
+  };
 
-      recognition.onend = () => {
-        setIsRecording(false);
-      };
-
-      recognitionRef.current = recognition;
-      recognition.start();
-    } catch (err) {
-      console.error('Speech recognition start failed:', err);
-      setIsRecording(false);
+  const stopVoiceRecording = (autoSubmit = false) => {
+    shouldRecordRef.current = false;
+    setIsRecording(false);
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {}
+    }
+    if (autoSubmit) {
+      setTimeout(() => {
+        handleSend();
+      }, 100);
     }
   };
 
-  const [isSpeaking, setIsSpeaking] = useState(false);
-
-  const handleToggleSpeech = (targetText = null) => {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-      alert('Text-to-speech is not supported in this browser.');
-      return;
-    }
-
-    if (window.speechSynthesis.speaking) {
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
-      return;
-    }
-
-    // Determine what text to speak: targetText or inputMessage or latest assistant message
-    let textToSpeak = targetText;
-    if (!textToSpeak) {
-      if (inputMessage && inputMessage.trim()) {
-        textToSpeak = inputMessage.trim();
-      } else {
-        const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant');
-        if (lastAssistant) {
-          textToSpeak = lastAssistant.content;
-        }
-      }
-    }
-
-    if (!textToSpeak) {
-      alert('No message to read aloud. Type something or ask a question first!');
-      return;
-    }
-
-    // Clean markdown syntax, links, and code blocks for smooth natural speech
-    const cleanSpeech = textToSpeak
-      .replace(/!\[.*?\]\(.*?\)/g, '')
-      .replace(/\[(.*?)\]\(.*?\)/g, '$1')
-      .replace(/```mermaid[\s\S]*?```/gi, 'Flowchart diagram.')
-      .replace(/```[\s\S]*?```/g, 'Code block omitted.')
-      .replace(/`([^`]+)`/g, '$1')
-      .replace(/[#*_~|]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    try {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(cleanSpeech);
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-      utterance.lang = navigator.language || 'en-US';
-
-      utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = (e) => {
-        console.warn('Speech synthesis notice:', e);
-        setIsSpeaking(false);
-      };
-
-      window.speechSynthesis.speak(utterance);
-    } catch (e) {
-      console.error('TTS error:', e);
-      setIsSpeaking(false);
+  const toggleRecording = () => {
+    if (isRecording) {
+      stopVoiceRecording(false);
+    } else {
+      startVoiceRecording();
     }
   };
 
@@ -948,18 +944,6 @@ export default function App() {
                             )}
                           </button>
 
-                          <button
-                            className={`action-btn ${isSpeaking ? 'active' : ''}`}
-                            onClick={() => handleToggleSpeech(msg.content)}
-                            title="Read aloud this message"
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                              <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
-                            </svg>
-                            <span>Read aloud</span>
-                          </button>
-
                           {msg.metadata && (
                             <button
                               className={`action-btn ${isDetailsOpen ? 'active' : ''}`}
@@ -1060,8 +1044,23 @@ export default function App() {
           {isRecording && (
             <div className="voice-recording-pill">
               <span className="recording-dot" />
-              <span>Listening to your voice... Speak now</span>
-              <button type="button" onClick={toggleRecording} className="stop-mic-btn">Done</button>
+              <span>Recording... Speak as long as you want</span>
+              <button
+                type="button"
+                onClick={() => stopVoiceRecording(true)}
+                className="search-mic-btn"
+                title="Stop and search immediately"
+              >
+                🔍 Search
+              </button>
+              <button
+                type="button"
+                onClick={() => stopVoiceRecording(false)}
+                className="stop-mic-btn"
+                title="Stop recording and review"
+              >
+                Done
+              </button>
             </div>
           )}
 
@@ -1112,38 +1111,17 @@ export default function App() {
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={isRecording ? "🎙️ Listening... Speak now to search" : "Message Aurora AI... (Type, attach files, or speak)"}
+              placeholder={isRecording ? "🎙️ Recording... Speak freely (click Stop or Search when done)" : "Message Aurora AI... (Type, attach files, or speak)"}
               data-testid="chat-input"
               disabled={isLoading}
             />
 
-            {/* Read Aloud Text-to-Speech Speaker Button */}
-            <button
-              type="button"
-              className={`speaker-btn ${isSpeaking ? 'speaking' : ''}`}
-              onClick={() => handleToggleSpeech()}
-              title={isSpeaking ? 'Stop speaking (Mute)' : 'Read aloud response or message (Speaker)'}
-            >
-              {isSpeaking ? (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" />
-                  <line x1="23" y1="9" x2="17" y2="15" />
-                  <line x1="17" y1="9" x2="23" y2="15" />
-                </svg>
-              ) : (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
-                </svg>
-              )}
-            </button>
-
-            {/* Voice Audio Recording Button */}
+            {/* Voice Microphone Recording Button */}
             <button
               type="button"
               className={`mic-btn ${isRecording ? 'recording' : ''}`}
               onClick={toggleRecording}
-              title={isRecording ? 'Stop voice recording' : 'Search with your voice (Microphone)'}
+              title={isRecording ? 'Stop voice recording' : 'Record voice to search (Microphone)'}
             >
               {isRecording ? (
                 <span className="mic-stop-icon">

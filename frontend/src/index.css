@@ -842,6 +842,24 @@ html, body, #root {
   100% { opacity: 1; transform: scale(1.2); }
 }
 
+.search-mic-btn {
+  background: #0f172a;
+  color: #ffffff;
+  border: none;
+  border-radius: 12px;
+  padding: 3px 11px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-left: 6px;
+  transition: all 0.15s ease;
+}
+
+.search-mic-btn:hover {
+  background: #1e293b;
+  transform: scale(1.04);
+}
+
 .stop-mic-btn {
   background: #ef4444;
   color: #ffffff;
@@ -851,7 +869,7 @@ html, body, #root {
   font-size: 0.72rem;
   font-weight: 600;
   cursor: pointer;
-  margin-left: 6px;
+  margin-left: 4px;
   transition: background 0.15s ease;
 }
 
