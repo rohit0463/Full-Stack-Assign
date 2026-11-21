@@ -683,6 +683,11 @@ html, body, #root {
   transform: translateY(-1px);
 }
 
+.chatgpt-input-box.recording {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.28), 0 14px 36px rgba(0, 0, 0, 0.55);
+}
+
 .chatgpt-input-box textarea {
   flex: 1;
   background: transparent;

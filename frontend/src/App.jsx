@@ -183,7 +183,7 @@ export default function App() {
   const [isRecording, setIsRecording] = useState(false);
   const recognitionRef = useRef(null);
   const shouldRecordRef = useRef(false);
-  const accumulatedTextRef = useRef('');
+  const baseTextRef = useRef('');
 
   const startVoiceRecording = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -192,12 +192,11 @@ export default function App() {
       return;
     }
 
-    // Initialize state
     shouldRecordRef.current = true;
-    accumulatedTextRef.current = inputMessage ? inputMessage.trim() + ' ' : '';
+    baseTextRef.current = inputMessage ? inputMessage.trim() + ' ' : '';
     setIsRecording(true);
 
-    const initRecognition = () => {
+    const runRecognition = () => {
       try {
         const recognition = new SpeechRecognition();
         recognition.continuous = true;
@@ -210,46 +209,34 @@ export default function App() {
         };
 
         recognition.onresult = (event) => {
-          let interim = '';
-          let finalChunk = '';
-
-          for (let i = event.resultIndex; i < event.results.length; i++) {
-            const transcript = event.results[i][0].transcript;
-            if (event.results[i].isFinal) {
-              finalChunk += transcript + ' ';
-            } else {
-              interim += transcript;
-            }
+          let currentSessionText = '';
+          for (let i = 0; i < event.results.length; i++) {
+            currentSessionText += event.results[i][0].transcript + ' ';
           }
 
-          if (finalChunk) {
-            accumulatedTextRef.current += finalChunk;
-          }
-
-          const combined = (accumulatedTextRef.current + interim).replace(/\s+/g, ' ').trim();
+          const combined = (baseTextRef.current + currentSessionText).replace(/\s+/g, ' ').trim();
           if (combined) {
             setInputMessage(combined);
           }
         };
 
         recognition.onerror = (event) => {
-          console.warn('Speech recognition notice:', event.error);
+          console.warn('Speech recognition status:', event.error);
           if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
             shouldRecordRef.current = false;
             setIsRecording(false);
-            alert('Microphone access was denied. Please allow microphone permission in your browser address bar.');
+            alert('Microphone access was denied. Please allow microphone permissions in your browser address bar.');
           }
         };
 
         recognition.onend = () => {
-          // If the user hasn't explicitly clicked stop, automatically keep recording across pauses
           if (shouldRecordRef.current) {
+            baseTextRef.current = inputMessage ? inputMessage.trim() + ' ' : '';
             try {
               recognition.start();
             } catch (e) {
-              // Re-instantiate if needed
               setTimeout(() => {
-                if (shouldRecordRef.current) initRecognition();
+                if (shouldRecordRef.current) runRecognition();
               }, 100);
             }
           } else {
@@ -260,16 +247,16 @@ export default function App() {
         recognitionRef.current = recognition;
         recognition.start();
       } catch (err) {
-        console.warn('Recognition start exception, retrying:', err);
+        console.warn('Recognition init exception, retrying:', err);
         if (shouldRecordRef.current) {
           setTimeout(() => {
-            if (shouldRecordRef.current) initRecognition();
-          }, 200);
+            if (shouldRecordRef.current) runRecognition();
+          }, 150);
         }
       }
     };
 
-    initRecognition();
+    runRecognition();
   };
 
   const stopVoiceRecording = (autoSubmit = false) => {
@@ -283,7 +270,7 @@ export default function App() {
     if (autoSubmit) {
       setTimeout(() => {
         handleSend();
-      }, 100);
+      }, 150);
     }
   };
 
@@ -1044,7 +1031,13 @@ export default function App() {
           {isRecording && (
             <div className="voice-recording-pill">
               <span className="recording-dot" />
-              <span>Recording... Speak as long as you want</span>
+              <span className="recording-status">
+                {inputMessage ? (
+                  <>Transcribed: <strong>"{inputMessage}"</strong></>
+                ) : (
+                  'Listening to your voice... Speak now'
+                )}
+              </span>
               <button
                 type="button"
                 onClick={() => stopVoiceRecording(true)}
@@ -1086,7 +1079,7 @@ export default function App() {
             </div>
           )}
 
-          <form className="chatgpt-input-box" onSubmit={handleSend}>
+          <form className={`chatgpt-input-box ${isRecording ? 'recording' : ''}`} onSubmit={handleSend}>
             <button
               type="button"
               className="attach-btn"
